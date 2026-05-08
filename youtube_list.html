@@ -1,0 +1,2102 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>YouTube 동영상 일자별 리스트</title>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f3f5f9;
+  --bg-alt: #fafbfd;
+  --surface: #ffffff;
+  --border: #e4e7ee;
+  --border-strong: #d5dae3;
+  --ink: #14161c;
+  --ink-2: #3a3f4b;
+  --ink-3: #6b7280;
+  --ink-4: #9099a6;
+  --brand: #ff3b3b;
+  --accent: #2563eb;
+  --green-soft: #e6f7ee;
+  --amber-soft: #fef3c7;
+  --red-soft: #fee2e2;
+  --shadow-sm: 0 1px 2px rgba(20,22,28,0.04), 0 1px 3px rgba(20,22,28,0.05);
+  --shadow-md: 0 4px 10px rgba(20,22,28,0.05), 0 2px 4px rgba(20,22,28,0.04);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+body { font-family: 'Pretendard', 'Inter', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; background:var(--bg); color:var(--ink); padding:24px; line-height:1.5; }
+.container { max-width:1640px; margin:0 auto; background:var(--surface); border-radius:18px; box-shadow:var(--shadow-md); overflow:hidden; border:1px solid var(--border); }
+
+/* Header */
+.header { padding:28px 32px 24px; background:linear-gradient(135deg,#1a1f2e 0%,#2a3142 60%,#3a3550 100%); color:#fff; position:relative; overflow:hidden; }
+.header::before { content:''; position:absolute; top:-40%; right:-10%; width:380px; height:380px; background:radial-gradient(circle, rgba(255,59,59,0.20) 0%, transparent 65%); pointer-events:none; }
+.header::after { content:''; position:absolute; bottom:-50%; left:-5%; width:280px; height:280px; background:radial-gradient(circle, rgba(37,99,235,0.18) 0%, transparent 70%); pointer-events:none; }
+.header-inner { position:relative; z-index:1; display:flex; align-items:center; gap:16px; }
+.header-icon { width:52px; height:52px; border-radius:14px; background:linear-gradient(135deg,#ff3b3b 0%,#cc1f1f 100%); display:flex; align-items:center; justify-content:center; font-size:26px; box-shadow:0 8px 24px rgba(255,59,59,0.35), inset 0 1px 0 rgba(255,255,255,0.25); }
+.header h1 { font-size:24px; font-weight:800; letter-spacing:-0.02em; color:#fff; }
+.header .sub { font-size:13px; color:rgba(255,255,255,0.72); margin-top:4px; font-weight:500; letter-spacing:0.01em; }
+.refresh-btn { background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.18); padding:8px 16px; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; transition:all .15s; }
+.refresh-btn:hover { background:rgba(255,255,255,0.2); border-color:rgba(255,255,255,0.3); }
+.refresh-btn.loading { pointer-events:none; opacity:.6; }
+.refresh-btn.loading::before { content:''; display:inline-block; width:10px; height:10px; border:2px solid rgba(255,255,255,0.3); border-top-color:#fff; border-radius:50%; animation:spin 0.7s linear infinite; margin-right:6px; vertical-align:-1px; }
+.ext-btn { background:rgba(255,59,59,0.85); color:#fff; border:1px solid rgba(255,59,59,0.4); padding:8px 14px; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; transition:all .15s; text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+.ext-btn:hover { background:#ff3b3b; transform:translateY(-1px); }
+.ext-btn-blue { background:rgba(37,99,235,0.85); border-color:rgba(37,99,235,0.4); }
+.ext-btn-blue:hover { background:#2563eb; }
+.ver-badge { display:inline-block; padding:5px 12px; border-radius:8px; background:linear-gradient(135deg,#ff3b3b 0%,#cc1f1f 100%); color:#fff; font-size:13px; font-weight:800; margin-left:10px; cursor:pointer; vertical-align:4px; transition:transform .15s, box-shadow .15s; box-shadow:0 4px 12px rgba(255,59,59,0.40); letter-spacing:0.02em; }
+.ver-badge:hover { transform:translateY(-1px); box-shadow:0 6px 16px rgba(255,59,59,0.55); }
+.ver-history-btn { display:inline-flex; align-items:center; gap:5px; margin-left:10px; padding:5px 12px; background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.25); border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; vertical-align:4px; transition:all .15s; }
+.ver-history-btn:hover { background:rgba(255,255,255,0.22); border-color:rgba(255,255,255,0.4); }
+
+/* 버전 모달 */
+.version-modal { position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; }
+.version-modal-bg { position:absolute; inset:0; background:rgba(0,0,0,0.55); backdrop-filter:blur(2px); }
+.version-modal-card { position:relative; background:#fff; border-radius:18px; width:min(640px, 90vw); max-height:80vh; overflow:hidden; box-shadow:0 24px 60px rgba(0,0,0,0.3); display:flex; flex-direction:column; }
+.version-modal-header { padding:18px 24px; background:linear-gradient(135deg,#1a1f2e 0%,#2a3142 100%); color:#fff; display:flex; align-items:center; justify-content:space-between; }
+.version-modal-header h2 { font-size:17px; font-weight:700; }
+.vm-close { background:rgba(255,255,255,0.15); color:#fff; border:none; width:30px; height:30px; border-radius:8px; font-size:20px; cursor:pointer; transition:background .15s; }
+.vm-close:hover { background:rgba(255,255,255,0.3); }
+.version-modal-body { padding:20px 24px; overflow-y:auto; }
+.ver-entry { padding:14px 0; border-bottom:1px solid var(--border); }
+.ver-entry:last-child { border-bottom:none; }
+.ver-entry .ver-head { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.ver-entry .ver-num { font-size:14px; font-weight:800; color:var(--brand); padding:2px 10px; background:var(--red-soft); border-radius:6px; }
+.ver-entry .ver-date { font-size:12px; color:var(--ink-3); }
+.ver-entry ul { margin:0 0 0 4px; padding-left:20px; font-size:13px; color:var(--ink-2); line-height:1.7; }
+.ver-entry li { padding:1px 0; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* View tabs (top-level: 통계 / 동영상 / 변경이력) */
+.view-tabs { display:flex; gap:0; padding:0 28px; background:#fff; border-bottom:1px solid var(--border); }
+.view-tab { padding:14px 22px; cursor:pointer; font-size:14px; font-weight:600; color:var(--ink-3); border-bottom:3px solid transparent; transition:all .15s; }
+.view-tab:hover { color:var(--ink); background:var(--bg-alt); }
+.view-tab.active { color:var(--brand); border-bottom-color:var(--brand); background:#fff; }
+.view-tab .count { font-size:11px; padding:2px 7px; border-radius:999px; background:var(--bg-alt); color:var(--ink-3); margin-left:8px; font-weight:700; }
+.view-tab.active .count { background:var(--red-soft); color:var(--brand); }
+
+/* Stats dashboard */
+.dashboard { padding:24px 32px; background:var(--bg-alt); }
+.dash-section { margin-bottom:24px; }
+.dash-section:last-child { margin-bottom:0; }
+.dash-title { font-size:13px; font-weight:700; color:var(--ink-3); margin-bottom:12px; letter-spacing:0.04em; text-transform:uppercase; display:flex; align-items:center; gap:8px; }
+.dash-title::before { content:''; width:18px; height:2px; background:var(--brand); border-radius:2px; }
+.kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; margin-bottom:20px; }
+.kpi-card { background:#fff; border:1px solid var(--border); border-radius:14px; padding:18px 20px; box-shadow:var(--shadow-sm); }
+.kpi-label { font-size:12px; color:var(--ink-3); font-weight:600; margin-bottom:6px; }
+.kpi-value { font-size:28px; font-weight:800; color:var(--ink); line-height:1.1; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; }
+.kpi-delta { font-size:12px; font-weight:600; margin-top:6px; display:inline-flex; align-items:center; gap:3px; padding:2px 8px; border-radius:999px; font-variant-numeric:tabular-nums; }
+.kpi-delta.up { background:var(--green-soft); color:#0d6938; }
+.kpi-delta.down { background:var(--red-soft); color:#9a1f1f; }
+.kpi-delta.flat { background:#f3f4f6; color:var(--ink-3); }
+.chart-wrap { background:#fff; border:1px solid var(--border); border-radius:14px; padding:20px; box-shadow:var(--shadow-sm); position:relative; height:340px; }
+.dash-grid-2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:14px; }
+.dash-card { background:#fff; border:1px solid var(--border); border-radius:14px; padding:20px; box-shadow:var(--shadow-sm); }
+.dash-card h3 { font-size:14px; font-weight:700; margin-bottom:12px; color:var(--ink); display:flex; align-items:center; gap:6px; }
+.dash-card .icon { font-size:16px; }
+.top-list { list-style:none; padding:0; margin:0; }
+.top-list li { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+.top-list li:last-child { border-bottom:none; }
+.top-list .rank { font-weight:800; color:var(--brand); width:24px; flex-shrink:0; font-variant-numeric:tabular-nums; }
+.top-list .title-cell { flex:1; min-width:0; }
+.top-list .title-cell a { color:var(--ink); text-decoration:none; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:500; }
+.top-list .title-cell a:hover { color:var(--accent); }
+.top-list .title-meta { font-size:11px; color:var(--ink-4); margin-top:2px; }
+.top-list .views { font-weight:700; color:var(--ink); font-variant-numeric:tabular-nums; flex-shrink:0; padding-left:8px; }
+.top-list .delta { font-size:11px; padding:2px 7px; border-radius:6px; font-weight:600; flex-shrink:0; font-variant-numeric:tabular-nums; }
+.delta.up { background:var(--green-soft); color:#0d6938; }
+.delta.down { background:var(--red-soft); color:#9a1f1f; }
+
+/* Summary cards */
+.summary { padding:20px 32px; background:#fff; border-bottom:1px solid var(--border); }
+.summary-title { font-size:11px; color:var(--ink-3); margin-bottom:12px; font-weight:700; letter-spacing:0.10em; text-transform:uppercase; display:flex; align-items:center; gap:8px; }
+.summary-title::before { content:''; width:18px; height:2px; background:var(--brand); border-radius:2px; }
+.summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+.summary-card { background:#fff; border:1px solid var(--border); border-radius:14px; padding:16px 18px; box-shadow:var(--shadow-sm); position:relative; overflow:hidden; transition:transform .2s ease; }
+.summary-card:hover { transform:translateY(-2px); }
+.summary-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--accent-color, var(--ink-3)); }
+.summary-card.c-total { --accent-color:#1a1f2e; background:linear-gradient(135deg,#1a1f2e 0%,#2a3142 100%); color:#fff; border-color:#1a1f2e; }
+.summary-card.c-total::before { background:#ff3b3b; height:4px; }
+.summary-card.c-wehago { --accent-color:#2563eb; }
+.summary-card.c-oneai  { --accent-color:#a855f7; }
+.summary-card.c-sa10   { --accent-color:#15a35a; }
+.summary-card.c-etc    { --accent-color:#f59e0b; }
+.summary-card .name { font-size:14px; font-weight:700; margin-bottom:4px; display:flex; align-items:center; gap:8px; color:var(--ink); }
+.summary-card.c-total .name { color:#fff; }
+.summary-card .sub-label { font-size:11px; color:var(--ink-4); margin-bottom:12px; line-height:1.4; min-height:14px; }
+.summary-card.c-total .sub-label { color:rgba(255,255,255,0.65); }
+.summary-card .total-num { font-size:30px; font-weight:800; color:var(--ink); line-height:1; margin-bottom:12px; letter-spacing:-0.03em; font-variant-numeric: tabular-nums; }
+.summary-card.c-total .total-num { color:#fff; }
+.summary-card .total-num .unit { font-size:12px; font-weight:600; color:var(--ink-3); margin-left:4px; }
+.summary-card.c-total .total-num .unit { color:rgba(255,255,255,0.6); }
+.summary-card .stats { display:flex; gap:5px; flex-wrap:wrap; }
+.summary-card .stat { padding:3px 9px; border-radius:999px; display:inline-flex; align-items:center; gap:5px; font-weight:600; font-size:11px; font-variant-numeric: tabular-nums; }
+.summary-card .stat .dot { width:6px; height:6px; border-radius:50%; }
+.stat-pub  { background:var(--green-soft); color:#0d6938; }
+.stat-pub .dot { background:#15a35a; }
+.stat-part { background:var(--amber-soft); color:#7c4a03; }
+.stat-part .dot { background:#d97706; }
+.stat-priv { background:var(--red-soft); color:#9a1f1f; }
+.stat-priv .dot { background:#dc2626; }
+.stat-dup { background:#dbeafe; color:#1e40af; }
+.stat-dup .dot { background:#3b82f6; }
+.summary-card.c-total .stat { background:rgba(255,255,255,0.13); color:#fff; }
+.summary-card.c-total .stat .dot { background:currentColor; }
+
+/* Tabs */
+.tabs { display:flex; flex-wrap:wrap; gap:6px; padding:18px 28px 0; border-bottom:1px solid var(--border); background:var(--bg-alt); }
+.tab { padding:10px 16px; background:#fff; border:1px solid var(--border); border-bottom:none; border-radius:10px 10px 0 0; cursor:pointer; font-size:13px; font-weight:500; color:var(--ink-2); transition:all .15s ease; white-space:nowrap; position:relative; top:1px; display:inline-flex; align-items:center; gap:6px; }
+.tab:hover { background:#fff; color:var(--ink); border-color:var(--border-strong); }
+.tab.active { background:var(--ink); color:#fff; border-color:var(--ink); font-weight:700; }
+.tab .badge { display:inline-flex; align-items:center; min-width:22px; padding:1px 7px; border-radius:999px; background:#e8ebf2; font-size:11px; font-weight:700; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+.tab.active .badge { background:rgba(255,255,255,0.22); color:#fff; }
+
+/* Toolbar */
+.toolbar { padding:16px 28px; border-bottom:1px solid var(--border); display:flex; gap:10px; align-items:center; flex-wrap:wrap; background:#fff; }
+.toolbar input[type=text]{ padding:9px 14px 9px 36px; border:1px solid var(--border-strong); border-radius:10px; font-size:13px; width:340px; background:#fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><path d='m21 21-4.3-4.3'/></svg>") no-repeat 12px center; }
+.toolbar input[type=text]:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(37,99,235,0.15); }
+.toolbar select { padding:9px 30px 9px 12px; border:1px solid var(--border-strong); border-radius:10px; font-size:13px; background:#fff url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>") no-repeat right 10px center; appearance:none; cursor:pointer; max-width:240px; }
+.toolbar select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(37,99,235,0.15); }
+.toolbar label { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--ink-2); cursor:pointer; padding:8px 12px; background:var(--bg-alt); border:1px solid var(--border); border-radius:10px; font-weight:500; }
+.toolbar label:hover { background:#fff; }
+.toolbar label input[type=checkbox]{ width:14px; height:14px; cursor:pointer; accent-color:var(--accent); }
+.toolbar .count { margin-left:auto; font-size:13px; color:var(--ink-2); font-weight:600; padding:6px 14px; background:var(--bg-alt); border-radius:999px; font-variant-numeric:tabular-nums; }
+
+/* 커스텀 재생목록 드롭다운 */
+.pl-dd-wrap { position:relative; display:inline-block; }
+.pl-dd-btn { padding:9px 30px 9px 12px; border:1px solid var(--border-strong); border-radius:10px; font-size:13px; background:#fff; cursor:pointer; min-width:200px; max-width:300px; text-align:left; position:relative; color:var(--ink-2); font-family:inherit; transition:border-color .15s; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.pl-dd-btn:hover { border-color:var(--border-strong); background:#f8fafe; }
+.pl-dd-btn .pl-dd-arrow { color:var(--ink-3); font-size:11px; flex-shrink:0; }
+.pl-dd-btn span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.pl-dd-panel { position:absolute; top:calc(100% + 4px); left:0; min-width:360px; max-width:440px; max-height:480px; overflow-y:auto; background:#fff; border:1px solid var(--border-strong); border-radius:10px; box-shadow:0 8px 24px rgba(20,22,28,0.10); z-index:100; padding:6px; }
+.pl-dd-item { padding:8px 12px; border-radius:6px; cursor:pointer; font-size:13px; color:var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pl-dd-item:hover { background:var(--bg-alt); color:var(--ink); }
+.pl-dd-item.selected { background:#dbeafe; color:#1e40af; font-weight:700; }
+.pl-dd-section-title { padding:10px 12px 4px; font-size:10px; font-weight:800; color:var(--ink-3); text-transform:uppercase; letter-spacing:.08em; }
+.pl-dd-section-title:not(:first-child) { border-top:1px solid var(--border); margin-top:4px; }
+.pl-dd-group { margin-top:4px; }
+.pl-dd-group-header { display:flex; align-items:center; justify-content:space-between; padding:9px 12px; cursor:pointer; background:#f3f4f6; border-radius:6px; font-size:12px; font-weight:700; color:var(--ink); transition:background .12s; }
+.pl-dd-group-header:hover { background:#e5e7eb; }
+.pl-dd-group-header .chev { transition:transform .15s; font-size:10px; color:var(--ink-3); }
+.pl-dd-group-header.open .chev { transform:rotate(90deg); }
+.pl-dd-group-header .gcount { font-size:10px; color:var(--ink-3); padding:1px 7px; background:#fff; border-radius:8px; margin-left:6px; font-weight:600; }
+.pl-dd-group-items { display:none; padding-left:12px; margin-top:2px; }
+.pl-dd-group.open .pl-dd-group-items { display:block; }
+
+/* Table */
+.table-wrap { overflow:auto; max-height:calc(100vh - 460px); background:#fff; }
+table { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; }
+thead th { position:sticky; top:0; background:#f8f9fc; color:var(--ink-2); font-weight:700; padding:12px 10px; text-align:left; border-bottom:1px solid var(--border-strong); white-space:nowrap; z-index:2; font-size:11.5px; letter-spacing:0.04em; text-transform:uppercase; }
+thead th:first-child { padding-left:24px; }
+thead th:last-child { padding-right:24px; }
+tbody td { padding:12px 10px; border-bottom:1px solid var(--border); vertical-align:middle; color:var(--ink-2); }
+tbody td:first-child { padding-left:24px; }
+tbody td:last-child { padding-right:24px; }
+tbody tr:hover { background:#f8faff; }
+tbody tr:hover td { color:var(--ink); }
+.col-no { width:64px; text-align:center; color:var(--ink-4); font-weight:600; font-variant-numeric:tabular-nums; }
+.col-prog { width:90px; }
+.col-type { width:100px; text-align:center; }
+.col-mod { width:110px; text-align:center; }
+.col-style { width:90px; text-align:center; }
+.col-target { width:70px; text-align:center; }
+.col-title { min-width:300px; font-weight:600; color:var(--ink); }
+.col-title a { color:var(--ink); text-decoration:none; }
+.col-title a:hover { color:var(--accent); text-decoration:underline; text-underline-offset:3px; }
+.col-date { width:110px; white-space:nowrap; text-align:center; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.col-len { width:90px; white-space:nowrap; color:var(--ink-3); text-align:center; font-variant-numeric:tabular-nums; }
+.col-views { width:100px; text-align:right; padding-right:16px; font-variant-numeric:tabular-nums; font-weight:600; }
+.col-status { width:90px; text-align:center; }
+.col-list { min-width:170px; color:var(--ink-3); text-align:left; font-size:12px; }
+.col-list .pl-item { display:block; padding:1px 0; }
+.col-list .pl-item + .pl-item { margin-top:2px; padding-top:3px; border-top:1px dashed var(--border); }
+.col-dup { width:60px; text-align:center; }
+thead th.col-dup { text-align:center; }
+.clear-btn { padding:9px 14px; border:1px solid var(--border-strong); border-radius:10px; font-size:13px; background:#fff; cursor:pointer; color:var(--ink-2); font-weight:600; transition:all .15s; }
+.clear-btn:hover { background:var(--bg-alt); border-color:var(--ink-3); color:var(--ink); }
+
+/* 점프 모드 배너 */
+.jump-banner { padding:10px 18px; background:linear-gradient(90deg,#fef3c7 0%,#fde68a 100%); border:1px solid #f59e0b; border-radius:10px; margin:10px 28px 0; display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13px; color:#7c4a03; font-weight:600; }
+.jump-banner .jb-text { display:flex; align-items:center; gap:8px; }
+.jump-banner .jb-text::before { content:'🎯'; font-size:16px; }
+.jump-banner .jb-clear { padding:6px 14px; background:#fff; border:1px solid #f59e0b; border-radius:8px; font-size:12px; font-weight:700; color:#7c4a03; cursor:pointer; transition:all .15s; }
+.jump-banner .jb-clear:hover { background:#fef3c7; border-color:#d97706; }
+
+/* WE Studio 전용 스타일 */
+#wsTableWrap { max-height:calc(100vh - 220px); }
+#view-westudio .col-prog { width:200px; min-width:200px; word-break:keep-all; white-space:normal; }
+#view-westudio thead th.col-prog { text-align:left; }
+.dup-marker { display:inline-block; padding:3px 8px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; transition:transform .12s; }
+.dup-marker:hover { transform:scale(1.08); }
+.dup-marker.dup-ws { background:#dbeafe; color:#1e40af; }
+.dup-marker.dup-ws:hover { background:#bfdbfe; }
+.dup-marker.dup-yt { background:#fee2e2; color:#9a1f1f; }
+.dup-marker.dup-yt:hover { background:#fecaca; }
+thead th.col-type, thead th.col-mod, thead th.col-style, thead th.col-date, thead th.col-len, thead th.col-status, thead th.col-no, thead th.col-target { text-align:center; }
+thead th.col-views { text-align:right; padding-right:16px; }
+thead th.col-list { text-align:left; }
+
+/* Highlight */
+mark { background:#fff59a; color:#7c4a03; padding:0 2px; border-radius:3px; font-weight:700; }
+
+/* Timestamp link */
+.ts-link { display:inline-block; padding:1px 7px; border-radius:6px; background:#eef2f9; color:#1e40af; font-size:11px; font-family:monospace; text-decoration:none; font-weight:600; margin:0 2px; cursor:pointer; }
+.ts-link:hover { background:#dbeafe; }
+
+/* Badges */
+.badge-tag { display:inline-block; padding:3px 10px; border-radius:6px; background:#eef2f9; color:var(--ink-2); font-size:11px; font-weight:600; }
+.badge-tag.b-WEHAGO { background:#dbeafe; color:#1e40af; }
+.badge-tag.b-SmartA { background:#dcfce7; color:#15803d; }
+.badge-tag.b-iCUBE, .badge-tag.b-ICUBE { background:#fef3c7; color:#92400e; }
+.badge-tag.b-ERPiU { background:#fce7f3; color:#9d174d; }
+.badge-tag.b-기타 { background:#f3f4f6; color:#4b5563; }
+.badge-status { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600; }
+.badge-status::before { content:''; width:6px; height:6px; border-radius:50%; }
+.s-public { background:var(--green-soft); color:#0d6938; }
+.s-public::before { background:#15a35a; }
+.s-partial { background:var(--amber-soft); color:#7c4a03; }
+.s-partial::before { background:#d97706; }
+.s-private { background:var(--red-soft); color:#9a1f1f; }
+.s-private::before { background:#dc2626; }
+
+.empty { padding:60px 20px; text-align:center; color:var(--ink-4); font-size:14px; }
+.empty::before { content:'📭'; display:block; font-size:36px; margin-bottom:8px; }
+
+.detail-toggle { cursor:pointer; color:var(--accent); font-size:11px; margin-top:6px; display:inline-block; font-weight:500; user-select:none; }
+.detail-toggle:hover { text-decoration:underline; }
+.detail-content { display:none; margin-top:8px; padding:12px 14px; background:var(--bg-alt); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:6px; font-size:12px; color:var(--ink-2); white-space:pre-wrap; max-width:640px; line-height:1.7; }
+.detail-content.show { display:block; }
+
+.group-header td { background:linear-gradient(90deg,#eef4ff 0%,#f7faff 100%); color:#1e3a8a; font-weight:700; font-size:13px; padding:12px 14px; border-top:1px solid #c7d7f5; border-bottom:1px solid #c7d7f5; }
+.group-header .gcount { font-weight:600; color:var(--ink-3); margin-left:10px; font-size:11px; padding:2px 8px; background:rgba(255,255,255,0.7); border-radius:999px; }
+
+.loading-overlay { padding:80px 20px; text-align:center; color:var(--ink-3); font-size:14px; }
+.loading-overlay::before { content:''; display:block; width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px; }
+.error-box { padding:30px; margin:20px; background:#fee2e2; border:1px solid #fca5a5; border-radius:10px; color:#991b1b; font-size:13px; line-height:1.6; }
+.error-box strong { display:block; margin-bottom:8px; font-size:14px; }
+
+/* Change history */
+.changelog-wrap { padding:24px 32px; background:var(--bg-alt); }
+.changelog-empty { padding:60px 20px; text-align:center; color:var(--ink-4); font-size:14px; }
+.changelog-empty .icon { font-size:36px; margin-bottom:12px; display:block; }
+.changelog-table { width:100%; background:#fff; border:1px solid var(--border); border-radius:14px; overflow:hidden; box-shadow:var(--shadow-sm); border-collapse:separate; border-spacing:0; }
+.changelog-table thead th { background:#f8f9fc; font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-2); padding:12px 14px; border-bottom:1px solid var(--border); text-align:left; }
+.changelog-table tbody td { padding:12px 14px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:top; }
+.changelog-table tbody tr:last-child td { border-bottom:none; }
+.changelog-table tbody tr.cl-row { cursor:pointer; transition:background .12s; }
+.changelog-table tbody tr.cl-row:hover { background:#eff6ff; }
+.changelog-table tbody tr.cl-row:hover .col-title { color:var(--accent); }
+.changelog-table .col-source { width:90px; }
+.src-badge { display:inline-block; padding:2px 8px; border-radius:6px; font-size:10.5px; font-weight:700; }
+.src-wehago { background:#dbeafe; color:#1e40af; }
+.src-ai     { background:#fce7f3; color:#9d174d; }
+.src-ws     { background:#fef3c7; color:#92400e; }
+.changelog-table tbody tr:hover { background:#fafbff; }
+.changelog-table .col-time { width:140px; color:var(--ink-3); font-variant-numeric:tabular-nums; white-space:nowrap; font-size:12px; }
+.changelog-table .col-type { width:80px; text-align:center; }
+.changelog-table .col-no { width:70px; text-align:center; font-weight:600; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.changelog-table .col-title { min-width:240px; font-weight:500; }
+.changelog-table .col-field { width:110px; font-size:12px; color:var(--ink-2); }
+.changelog-table .col-old, .changelog-table .col-new { font-size:12px; max-width:280px; word-break:break-word; }
+.changelog-table .col-old { color:var(--ink-3); text-decoration:line-through; }
+.changelog-table .col-new { color:#0d6938; font-weight:600; }
+.cl-type-badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:11px; font-weight:700; }
+.cl-type-add { background:var(--green-soft); color:#0d6938; }
+.cl-type-edit { background:#dbeafe; color:#1e40af; }
+.cl-type-del { background:var(--red-soft); color:#9a1f1f; }
+
+/* View sections */
+.view-section { display:none; }
+.view-section.active { display:block; }
+
+/* Scrollbar */
+.table-wrap::-webkit-scrollbar { width:10px; height:10px; }
+.table-wrap::-webkit-scrollbar-track { background:transparent; }
+.table-wrap::-webkit-scrollbar-thumb { background:#cdd2dd; border-radius:10px; border:2px solid #fff; }
+.table-wrap::-webkit-scrollbar-thumb:hover { background:#b0b6c4; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="header-inner">
+      <div class="header-icon">▶</div>
+      <div style="flex:1;">
+        <h1>YouTube 동영상 일자별 리스트
+          <span class="ver-badge" id="verBadge" title="버전 정보 보기">v1.5</span>
+          <button class="ver-history-btn" id="verHistoryBtn">📋 업데이트 내역 보기</button>
+        </h1>
+        <div class="sub" id="lastUpdated">위하고(WEHAGO) 공식 채널 · 데이터 로딩 중…</div>
+      </div>
+      <a href="https://www.youtube.com/@help.douzone" target="_blank" rel="noopener" class="ext-btn" title="WEHAGO YouTube 채널 열기">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+        YouTube
+      </a>
+      <a href="https://www.wehago.com/westudio" target="_blank" rel="noopener" class="ext-btn ext-btn-blue" title="WE Studio 열기">
+        🎬 WE Studio
+      </a>
+      <button id="refreshBtn" class="refresh-btn" title="시트에서 최신 데이터 다시 불러오기">↻ 새로고침</button>
+    </div>
+  </div>
+
+  <!-- 버전 정보 모달 -->
+  <div class="version-modal" id="versionModal" style="display:none;">
+    <div class="version-modal-bg"></div>
+    <div class="version-modal-card">
+      <div class="version-modal-header">
+        <h2>📋 버전 변경사항</h2>
+        <button class="vm-close" id="vmClose">×</button>
+      </div>
+      <div class="version-modal-body" id="versionLogBody"></div>
+    </div>
+  </div>
+
+  <div class="view-tabs">
+    <div class="view-tab active" data-view="list">📋 동영상 목록 <span class="count" id="listCount">0</span></div>
+    <div class="view-tab" data-view="westudio">🎬 WE Studio <span class="count" id="westudioCount">0</span></div>
+    <div class="view-tab" data-view="dashboard">📊 통계 대시보드</div>
+    <div class="view-tab" data-view="changelog">🕒 변경 이력 <span class="count" id="changelogCount">0</span></div>
+  </div>
+
+  <!-- 통계 대시보드 -->
+  <div class="view-section" id="view-dashboard">
+    <div class="dashboard">
+      <div class="dash-section">
+        <div class="dash-title">📈 채널 핵심 지표</div>
+        <div class="kpi-grid" id="kpiGrid"></div>
+      </div>
+      <div class="dash-section">
+        <div class="dash-title">📅 일자별 조회수 추이</div>
+        <div class="chart-wrap"><canvas id="dailyChart"></canvas></div>
+      </div>
+      <div class="dash-section">
+        <div class="dash-title">📆 월별 조회수 추이</div>
+        <div class="chart-wrap"><canvas id="monthlyChart"></canvas></div>
+      </div>
+      <div class="dash-section">
+        <div class="dash-title">🏆 TOP 영상</div>
+        <div class="dash-grid-2">
+          <div class="dash-card">
+            <h3><span class="icon">🚀</span> <span id="topGrowthTitle">최근 7일</span> 성장 TOP 10</h3>
+            <ol class="top-list" id="topByGrowth"></ol>
+          </div>
+          <div class="dash-card">
+            <h3><span class="icon">📈</span> <span id="topMonthTitle">최근 한 달</span> 조회수 TOP 10</h3>
+            <ol class="top-list" id="topByMonth"></ol>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 동영상 목록 -->
+  <div class="view-section active" id="view-list">
+    <div class="jump-banner" id="ytJumpBanner" style="display:none;">
+      <div class="jb-text"><span id="ytJumpText">고유번호로 점프된 상태입니다.</span></div>
+      <button type="button" class="jb-clear" id="ytJumpClear">✕ 점프 해제 (전체 보기)</button>
+    </div>
+    <div class="summary">
+      <div class="summary-title">📊 프로그램별 요약 (전체 기준)</div>
+      <div class="summary-grid" id="summaryGrid"></div>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <div class="toolbar">
+      <input type="text" id="search" placeholder="제목/내용 검색 (공백으로 여러 키워드)...">
+      <button type="button" class="clear-btn" id="clearSearchBtn" title="검색 초기화">↺ 초기화</button>
+      <select id="typeFilter"><option value="">전체 유형</option></select>
+      <select id="statusFilter"><option value="">전체 공개상태</option></select>
+      <div class="pl-dd-wrap">
+        <button type="button" class="pl-dd-btn" id="plDdBtn">
+          <span id="plDdLabel">전체 재생목록</span>
+          <span class="pl-dd-arrow">▾</span>
+        </button>
+        <div class="pl-dd-panel" id="plDdPanel" style="display:none;"></div>
+      </div>
+      <input type="hidden" id="playlistFilter" value="">
+      <select id="sortBy">
+        <option value="date_desc">게시일 (최신순)</option>
+        <option value="date_asc">게시일 (오래된순)</option>
+        <option value="views_desc">조회수 (많은순)</option>
+        <option value="no_desc">번호 (내림차순)</option>
+        <option value="no_asc">번호 (오름차순)</option>
+      </select>
+      <label><input type="checkbox" id="groupByPlaylist"> 재생목록별 그룹</label>
+      <div class="count" id="count">0건</div>
+    </div>
+    <div class="table-wrap" id="tableWrap">
+      <div class="loading-overlay">데이터를 불러오는 중…</div>
+    </div>
+  </div>
+
+  <!-- WE Studio 별도 탭 -->
+  <div class="view-section" id="view-westudio">
+    <div class="jump-banner" id="wsJumpBanner" style="display:none;">
+      <div class="jb-text"><span id="wsJumpText">고유번호로 점프된 상태입니다.</span></div>
+      <button type="button" class="jb-clear" id="wsJumpClear">✕ 점프 해제 (전체 보기)</button>
+    </div>
+    <div class="summary">
+      <div class="summary-title">📊 WE Studio 프로그램별 요약</div>
+      <div class="summary-grid" id="wsSummaryGrid"></div>
+    </div>
+    <div class="tabs" id="wsTabs"></div>
+    <div class="toolbar">
+      <input type="text" id="wsSearch" placeholder="WE Studio 영상 검색...">
+      <button type="button" class="clear-btn" id="wsClearBtn" title="검색 초기화">↺ 초기화</button>
+      <select id="wsChannelFilter"><option value="">전체 채널</option></select>
+      <select id="wsStatusFilter"><option value="">전체 공개상태</option></select>
+      <select id="wsDupFilter">
+        <option value="">전체</option>
+        <option value="dup">YouTube 중복만</option>
+        <option value="only">WE Studio 단독만</option>
+      </select>
+      <div class="count" id="wsCount">0건</div>
+    </div>
+    <div class="table-wrap" id="wsTableWrap">
+      <div class="loading-overlay">WE Studio 데이터 로딩 중…</div>
+    </div>
+  </div>
+
+  <!-- 변경 이력 -->
+  <div class="view-section" id="view-changelog">
+    <div class="changelog-wrap" id="changelogWrap">
+      <div class="changelog-empty">
+        <span class="icon">📭</span>
+        변경 이력 데이터가 없습니다.<br>
+        <small>Apps Script에서 "📋 변경 사항 감지 + 기록"을 실행하면 변경 이력이 시트에 쌓입니다.<br>
+        그 시트도 별도로 CSV 게시하면 여기에 표시됩니다.</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 설정 — Google Sheets CSV 게시 URL (통합 문서 1개)
+// ============================================================
+const _BASE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS251VrlVJr8mn0Sl6IEJpjLi8HfNudq6MW5kVo0ZJplaTHSbTGNVk-HXtUz2K0ED8rBXTqtmij4P1U/pub';
+const WEHAGO_CSV_URL    = _BASE + '?gid=695276931&single=true&output=csv';   // 위하고 공식 채널
+const AI_LIFE_CSV_URL   = _BASE + '?gid=625834157&single=true&output=csv';   // 슬기로운 AI생활
+const WESTUDIO_CSV_URL  = _BASE + '?gid=393574302&single=true&output=csv';   // We Studio
+const VIEWS_CSV_URL     = _BASE + '?gid=1273640453&single=true&output=csv';  // 조회수
+const CHANGELOG_CSV_URL = _BASE + '?gid=153949390&single=true&output=csv';   // 변경이력
+const CSV_URL = WEHAGO_CSV_URL;   // 호환용
+
+// 버전 정보
+const VERSION = '1.5';
+const VERSION_LOG = [
+  { version:'1.5', date:'2026-05-08', changes:[
+    '변경이력 카운트: 최근 7일 변경분만 카운트 (누적 표시 제거)',
+    '검색 초기화 버튼 동작 추가 (목록 + WE Studio 양쪽)',
+    'WS/YT 마커 클릭 점프: 고유번호 100% 매칭 (기존 검색어 입력 방식 폐지)',
+    '점프 모드 배너 추가 — 점프 상태에서 "✕ 점프 해제" 버튼으로 전체 보기 복귀',
+    'WE Studio 탭: 프로그램별 요약 4개 카드 + 공개/일부/비공개 + YT중복 건수 표시',
+    'WE Studio 탭: 동영상 목록과 동일한 카테고리 탭 (전체/WEHAGO T/ONE AI/회계관리/인사관리/물류관리/...) — 데이터 있는 탭만 표시',
+    '변경이력 → 영상 점프 시에도 고유번호 매칭으로 변경 (이전: 영상제목 일부 검색)',
+  ] },
+  { version:'1.4', date:'2026-05-06', changes:[
+    '슬기로운 AI생활 채널 통합 (위하고와 합쳐서 동영상 목록에 표시)',
+    'WE Studio 별도 탭 추가 (영상 목록만 표시, 통계 별도)',
+    'YouTube ↔ WE Studio 양방향 중복 매칭 클릭 점프 (고유번호 기반)',
+    '변경 이력 통합: 3개 시트 모두 추적 + "출처" 컬럼 추가',
+    '제작자 / 고유번호 컬럼 화면 숨김 (데이터는 매칭에 활용)',
+    '통계 KPI는 YouTube 데이터만 (WE Studio 영상 개수만 별도 표시)',
+    '통합 Google Sheets 문서 1개로 운영 (시트별로 게시)',
+  ] },
+  { version:'1.3', date:'2026-05-04', changes:[
+    '재생목록 그룹 순서 재정렬: SmartA 10 → SmartA → iCUBE → ERP iU',
+    '재생목록 정규식 매칭 강화 (iCUBE 물류 등 누락 항목 자동 분류)',
+    '재생목록 그룹별 표시 순서 명시화 (회계 → 부가가치세 → 인사 → 연말정산 → 물류 → ... 등)',
+    '"(레거시)" 라벨 제거',
+    '커스텀 드롭다운으로 교체 (클릭하면 펼쳐지는 방식)',
+    '통계 대시보드 개편: 누적 그래프 제거, 일자별·월별 두 그래프 추가',
+    'TOP 영상: 누적 조회수 TOP10 제거 → 7일 성장 + 한 달 조회수 TOP10',
+    '버전 배지 강조 + "📋 업데이트 내역 보기" 버튼 추가',
+  ] },
+  { version:'1.2', date:'2026-04-30', changes:[
+    '조회수 1000+ 표시 버그 수정 (콤마 포함 숫자 파싱)',
+    '변경 이력 자동 1시간 간격 체크',
+    '변경 이력 클릭 → 해당 영상으로 점프',
+    '조회수 별도 시트로 분리 관리 가능',
+    'YouTube / WE Studio 바로가기 버튼 추가',
+    '재생목록 그룹화 (Smart A · iCUBE · ERP iU 접기/펼치기)',
+    '자막 5분 단위 컬럼 표시 지원',
+    '버전 정보 + 변경사항 패널 추가',
+  ] },
+  { version:'1.1', date:'2026-04-29', changes:[
+    '통계 대시보드 추가 (KPI · 트렌드 차트 · TOP 10)',
+    '검색 키워드 하이라이트',
+    '타임스탬프 클릭 → 영상 그 시점으로 점프',
+    '다중 키워드 AND 검색',
+    '변경 이력 탭 신설',
+  ] },
+  { version:'1.0', date:'2026-04-28', changes:[
+    '초기 버전: 동영상 목록 · 15개 카테고리 탭 · 검색/필터',
+    '프로그램별 요약 카드',
+    'Google Sheets CSV 자동 동기화',
+  ] },
+];
+
+// 재생목록 — 항상 펼쳐진 상위 항목 (주요 카테고리)
+const PLAYLIST_TOP = [
+  '🔥 실시간 핫이슈 🔥',
+  '👩‍💻 위며들다 | WEHAGO 매력에 스며든 고객 성공 사례',
+  '【ONE AI】 일하는 방식을 새롭게!',
+  '【NAHAGO】WEHAGO하고, NAHAGO하자',
+  '【T edge】 WEHAGO T 연결을 통한 업무 협업의 혁신',
+  'WEHAGO가 처음이라면? WEHAGO 최초 설정 가이드 📺',
+  '【WEHAGO T】 수임처관리',
+  '【WEHAGO】 서비스',
+];
+
+// 그룹 정의 — 큰 순서: SmartA 10 → SmartA → iCUBE → ERP iU
+// 각 그룹은 { match: 함수, order: 우선 표시 순서 } 형식
+// match 가 true 인 모든 재생목록은 그 그룹에 포함됨 (순서에 없어도)
+const PLAYLIST_GROUPS = [
+  {
+    name: 'SmartA 10',
+    // 명시 리스트와 정확 일치만 (WEHAGO 라도 "서비스" 같이 주요로 빠진 건 SmartA10 그룹에 안 들어가야 함)
+    match: pl => [
+      '【WEHAGO】 회계관리','【WEHAGO】 부가가치세','【WEHAGO】 급여관리','【WEHAGO】 연말정산',
+      '【WEHAGO】 물류관리','【WEHAGO】 법인조정','【WEHAGO】 개인조정','【WEHAGO】 공통 · 기타',
+      '【WEHAGO】 2021년 귀속 연말정산','【WEHAGO】 2020년 귀속 연말정산',
+      '【WEHAGO】 2022년 법인세 신고','【WEHAGO】 2021년 법인세 신고',
+      '【WEHAGO】 2021년 귀속 개인조정','【WEHAGO】 2020년 귀속 개인조정','【WEHAGO】 2019년 귀속 개인조정'
+    ].includes(pl),
+    order: [
+      '【WEHAGO】 회계관리',
+      '【WEHAGO】 부가가치세',
+      '【WEHAGO】 급여관리',
+      '【WEHAGO】 연말정산',
+      '【WEHAGO】 물류관리',
+      '【WEHAGO】 법인조정',
+      '【WEHAGO】 개인조정',
+      '【WEHAGO】 공통 · 기타',
+      '【WEHAGO】 2021년 귀속 연말정산',
+      '【WEHAGO】 2020년 귀속 연말정산',
+      '【WEHAGO】 2022년 법인세 신고',
+      '【WEHAGO】 2021년 법인세 신고',
+      '【WEHAGO】 2021년 귀속 개인조정',
+      '【WEHAGO】 2020년 귀속 개인조정',
+      '【WEHAGO】 2019년 귀속 개인조정',
+    ],
+  },
+  {
+    name: 'SmartA',
+    match: pl => /Smart\s*A/i.test(pl) && !/WEHAGO/i.test(pl),
+    order: [
+      '【Smart A】 회계',
+      '【Smart A】 부가가치세',
+      '【Smart A】 인사급여',
+      '【Smart A】 연말정산',
+      '【Smart A】 물류',
+      '【Smart A】 법인조정',
+      '【Smart A】 개인조정',
+      '【Smart A】 SYSTEM | 설치,제거,데이터 백업',
+      '【Smart A】 2021년 귀속 연말정산',
+      '【Smart A】 2020년 귀속 연말정산',
+      '【Smart A】 2022년 법인세 신고',
+      '【Smart A】 2021년 법인세 신고',
+      '【Smart A】 2020년 법인세 신고',
+      '【Smart A】 2019년 법인세 신고',
+      '【Smart A】 2021년 귀속 개인조정',
+      '【Smart A】 2020년 귀속 개인조정',
+      '【Smart A】 2019년 귀속 개인조정',
+    ],
+  },
+  {
+    name: 'iCUBE',
+    match: pl => /iCUBE|ICUBE|G20/i.test(pl),
+    order: [
+      '【iCUBE】 회계관리',
+      '【iCUBE】 부가가치세',
+      '【iCUBE】 인사/급여관리',
+      '【iCUBE】 연말정산',
+      '【iCUBE】 물류',
+      '【iCUBE】 물류관리',
+      '【iCUBE】 시스템관리',
+      '【G20】 예산관리',
+    ],
+  },
+  {
+    name: 'ERP iU',
+    match: pl => /ERP\s*iU/i.test(pl),
+    order: [
+      '【ERP iU】 회계 FAQ',
+      '【ERP iU】 인사 FAQ',
+      '【ERP iU】 연말정산 FAQ',
+      '【ERP iU】 물류 FAQ',
+    ],
+  },
+];
+
+// (구) LEGACY_GROUPS 호환용 빈 객체
+const LEGACY_GROUPS = {};
+
+// ============================================================
+let DATA = [];                  // YouTube 통합 (위하고 + 슬기로운 AI생활)
+let WESTUDIO_DATA = [];         // WE Studio
+let DATE_COLUMNS = [];
+let CHANGELOG = [];
+let YT_BY_VID = new Map();      // 고유번호 → YouTube record
+let WS_BY_VID = new Map();      // 고유번호 → WE Studio record
+let JUMP_VID = '';              // YouTube 목록에서 점프할 고유번호
+let WS_JUMP_VID = '';            // WE Studio 목록에서 점프할 고유번호
+let currentTab = 'all';
+let currentWsTab = 'all';
+let currentView = 'list';
+
+const TABS = [
+  { id:'all', label:'전체', filter: r => true },
+  { id:'wehago_t', label:'WEHAGO T', filter: r => r['모듈'] === '수임처 관리' },
+  { id:'one_ai', label:'ONE AI', filter: r => r['상세유형'] && r['상세유형'].trim() === 'ONE AI' },
+  { id:'nahago', label:'NAHAGO', filter: r => r['모듈'] && r['모듈'].trim() === 'NAHAGO' },
+  { id:'tedge', label:'T Edge', filter: r => r['모듈'] && r['모듈'].trim().toLowerCase() === 't edge' },
+  { id:'service', label:'서비스', filter: r => r['모듈'] === '서비스' },
+  { id:'common', label:'공통기타', filter: r => (r['프로그램']==='WEHAGO' || r['프로그램']==='기타') && r['모듈']==='공통/기타' },
+  { id:'sa_acc', label:'Smart A10_회계관리', filter: r => r['프로그램']==='WEHAGO' && r['모듈']==='회계 관리' },
+  { id:'sa_hr',  label:'Smart A10_인사관리', filter: r => r['프로그램']==='WEHAGO' && r['모듈']==='인사 관리' },
+  { id:'sa_log', label:'Smart A10_물류관리', filter: r => r['프로그램']==='WEHAGO' && r['모듈']==='물류 관리' },
+  { id:'sa_corp',label:'Smart A10_법인조정', filter: r => r['프로그램']==='WEHAGO' && r['모듈']==='법인조정' },
+  { id:'sa_per', label:'Smart A10_개인조정', filter: r => r['프로그램']==='WEHAGO' && r['모듈']==='개인조정' },
+  { id:'smarta', label:'SmartA', filter: r => r['프로그램']==='SmartA' },
+  { id:'icube',  label:'ICUBE', filter: r => r['프로그램'] && r['프로그램'].toLowerCase()==='icube' },
+  { id:'erpiu',  label:'ERP iU', filter: r => r['프로그램']==='ERP iU' }
+];
+
+const PROGRAM_GROUPS = [
+  { id:'total',  cls:'c-total',  label:'전체',     sub:'All Programs',                                 filter: r => true,                                                                                                                            icon:'🎬', total:true },
+  { id:'wehago', cls:'c-wehago', label:'WEHAGO',   sub:'WEHAGO T · NAHAGO · T Edge · 서비스 · 공통기타', filter: r => (r['프로그램']==='WEHAGO' || r['프로그램']==='기타') && r['상세유형']!=='ONE AI' && r['상세유형']!=='SmartA 10', icon:'🟦' },
+  { id:'oneai',  cls:'c-oneai',  label:'ONE AI',   sub:'AI Solutions',                                 filter: r => r['상세유형']==='ONE AI',                                                                                                        icon:'✨' },
+  { id:'sa10',   cls:'c-sa10',   label:'SmartA 10',sub:'WEHAGO · Smart A 10',                          filter: r => r['상세유형']==='SmartA 10',                                                                                                     icon:'🟩' },
+  { id:'etc',    cls:'c-etc',    label:'기타',     sub:'SmartA · iCUBE · ERP iU',                      filter: r => ['SmartA','iCUBE','ICUBE','ERP iU'].includes(r['프로그램']),                                                                      icon:'⚙️' },
+];
+
+function escapeHtml(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtNum(n){ const x = Number(n); return isFinite(x) ? x.toLocaleString() : '—'; }
+
+function statusBadge(s){
+  const cls = s==='공개'?'s-public':(s==='일부공개'?'s-partial':(s==='비공개'?'s-private':''));
+  return `<span class="badge-status ${cls}">${escapeHtml(s)}</span>`;
+}
+
+function fmtDate(v){
+  if(!v) return '';
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
+  if(m) return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+  return s;
+}
+
+function fmtDuration(v){
+  if(v == null) return '';
+  const s = String(v).trim();
+  if(!s) return '';
+  if(/^0?\.\d+$/.test(s) || /^\d+\.\d+$/.test(s)){
+    const n = parseFloat(s);
+    if(!isNaN(n) && n > 0 && n < 2){
+      const total = Math.round(n * 86400);
+      const h = Math.floor(total/3600), m = Math.floor((total%3600)/60), sec = total%60;
+      const pad = x => String(x).padStart(2,'0');
+      if(h>0) return `${h}시간 ${pad(m)}분 ${pad(sec)}초`;
+      if(m>0) return `${m}분 ${pad(sec)}초`;
+      return `${sec}초`;
+    }
+  }
+  return s;
+}
+
+function getPlaylists(rec){
+  const v = rec['재생목록']||'';
+  if(!v) return [];
+  return String(v).split(/[\n;]/).map(s => s.trim()).filter(Boolean);
+}
+
+// 일자 컬럼 식별 (YYYY-MM-DD 형태)
+function isDateCol(name){
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(name||'').trim());
+}
+
+// 안전한 숫자 파싱 — 콤마(1,234) / 따옴표 / 공백 제거 후 변환
+function parseNum(v){
+  if (v == null || v === '') return 0;
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  const s = String(v).replace(/[,"\s]/g, '').trim();
+  if (!s || s === '—' || s === '-') return 0;
+  const n = Number(s);
+  return isFinite(n) ? n : 0;
+}
+
+// 영상의 최신 조회수 (가장 최근 날짜의 값)
+function latestViews(rec){
+  for (let i = DATE_COLUMNS.length - 1; i >= 0; i--){
+    const v = parseNum(rec[DATE_COLUMNS[i]]);
+    if (v > 0) return v;
+  }
+  return 0;
+}
+
+// 두 날짜 사이 조회수 증가
+function viewsDelta(rec, fromCol, toCol){
+  const from = parseNum(rec[fromCol]);
+  const to = parseNum(rec[toCol]);
+  return to - from;
+}
+
+// 영상 ID 추출 (URL → id)
+function extractVideoId(url){
+  if (!url) return null;
+  const s = String(url).trim();
+  const patterns = [
+    /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/live\/([a-zA-Z0-9_-]{11})/,
+    /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/
+  ];
+  for (const p of patterns){ const m = s.match(p); if (m) return m[1]; }
+  return null;
+}
+
+// 검색 키워드 매칭 (AND 로직, 모든 키워드 포함되어야 일치)
+function matchesQuery(text, keywords){
+  if (!keywords.length) return true;
+  const lower = (text || '').toLowerCase();
+  return keywords.every(k => lower.includes(k));
+}
+
+// 키워드 하이라이트 (HTML safe)
+function highlightText(text, keywords){
+  if (!text) return '';
+  if (!keywords || !keywords.length) return escapeHtml(text);
+  // 단일 글자 키워드는 무시 (a, m 같은 게 <mark> 태그 안의 글자랑 충돌)
+  const valid = keywords.filter(k => k && k.length >= 2);
+  if (!valid.length) return escapeHtml(text);
+
+  // 모든 키워드를 한 번의 regex 로 매칭 → 텍스트를 segment 로 쪼개고
+  // 각 segment 만 escapeHtml 후 mark 로 감싸기 (중첩 불가능)
+  const sorted = valid.slice().sort((a, b) => b.length - a.length);
+  const pattern = sorted.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const re = new RegExp(pattern, 'gi');
+
+  const parts = [];
+  let lastIdx = 0;
+  let m;
+  while ((m = re.exec(text)) !== null){
+    if (m[0].length === 0) { re.lastIndex++; continue; }
+    if (m.index > lastIdx) parts.push(escapeHtml(text.substring(lastIdx, m.index)));
+    parts.push('<mark>' + escapeHtml(m[0]) + '</mark>');
+    lastIdx = m.index + m[0].length;
+  }
+  if (lastIdx < text.length) parts.push(escapeHtml(text.substring(lastIdx)));
+  return parts.join('');
+}
+
+// 타임스탬프(00:00, 1:23, 12:34:56) 자동 인식 → YouTube 점프 링크로 변환
+function linkifyTimestamps(text, videoId){
+  if (!text || !videoId) return escapeHtml(text);
+  let escaped = escapeHtml(text);
+  // 매칭: H:MM:SS 또는 MM:SS (1~2자리, 1~2자리, 0~2자리)
+  const re = /\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/g;
+  escaped = escaped.replace(re, (m, a, b, c) => {
+    const sec = c ? (parseInt(a)*3600 + parseInt(b)*60 + parseInt(c))
+                  : (parseInt(a)*60 + parseInt(b));
+    return `<a href="https://youtu.be/${videoId}?t=${sec}" target="_blank" rel="noopener" class="ts-link">${m}</a>`;
+  });
+  return escaped;
+}
+
+// detail content (timestamp + highlight 둘 다 적용)
+function buildDetailHtml(text, videoId, keywords){
+  if (!text) return '';
+  let html = linkifyTimestamps(text, videoId);
+  // 단일 글자 키워드는 무시 (HTML 태그 안의 글자와 충돌 방지)
+  const valid = (keywords || []).filter(k => k && k.length >= 2);
+  if (valid.length){
+    // 태그 외 텍스트 세그먼트에만 하이라이트 적용
+    const sorted = valid.slice().sort((a, b) => b.length - a.length);
+    const pattern = sorted.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const re = new RegExp(pattern, 'gi');
+    html = html.split(/(<[^>]+>)/g).map(seg => {
+      if (seg.startsWith('<')) return seg;
+      // seg는 이미 escapeHtml 된 텍스트
+      // re 로 일치하는 부분 → <mark>로 감싸기
+      return seg.replace(re, m => '<mark>' + m + '</mark>');
+    }).join('');
+  }
+  return html;
+}
+
+// ============================================================
+// 통계 대시보드 렌더링
+// ============================================================
+let dailyChart = null;
+let monthlyChart = null;
+function renderDashboard(){
+  if (!DATA.length){
+    document.getElementById('kpiGrid').innerHTML = '';
+    return;
+  }
+  // KPI: 전체 영상수, 총 조회수, 일주일 증가, 한달 증가
+  const totalVideos = DATA.length;
+  const totalViews = DATA.reduce((sum, r) => sum + (latestViews(r) || 0), 0);
+  const publicVideos = DATA.filter(r => r['공개상태'] === '공개').length;
+
+  // 어제 신규 / 최근 7일 / 최근 30일 — 실제 데이터 윈도우 기반
+  let yestDelta = 0, weekDelta = 0, monthDelta = 0;
+  let yestDays = 0, weekDays = 0, monthDays = 0;
+  let hasYest = false, hasWeek = false, hasMonth = false;
+  if (DATE_COLUMNS.length >= 2){
+    const last = DATE_COLUMNS[DATE_COLUMNS.length - 1];
+    const prev = DATE_COLUMNS[DATE_COLUMNS.length - 2];
+    const lastDate = new Date(last);
+    // 어제 (전일) 증가
+    DATA.forEach(r => { yestDelta += viewsDelta(r, prev, last); });
+    yestDays = Math.round((lastDate - new Date(prev)) / 86400000) || 1;
+    hasYest = true;
+
+    // 7일/30일 윈도우 찾기
+    let weekFromCol = null, monthFromCol = null;
+    for (let i = DATE_COLUMNS.length - 1; i >= 0; i--){
+      const d = new Date(DATE_COLUMNS[i]);
+      const diffDays = (lastDate - d) / 86400000;
+      if (!weekFromCol && diffDays >= 7) weekFromCol = DATE_COLUMNS[i];
+      if (!monthFromCol && diffDays >= 30) monthFromCol = DATE_COLUMNS[i];
+    }
+    // 7일치가 없으면 가장 오래된 일자 사용 (최대 윈도우)
+    const earliest = DATE_COLUMNS[0];
+    if (!weekFromCol) weekFromCol = earliest;
+    if (!monthFromCol) monthFromCol = earliest;
+    weekDays = Math.round((lastDate - new Date(weekFromCol)) / 86400000);
+    monthDays = Math.round((lastDate - new Date(monthFromCol)) / 86400000);
+    DATA.forEach(r => {
+      weekDelta += viewsDelta(r, weekFromCol, last);
+      monthDelta += viewsDelta(r, monthFromCol, last);
+    });
+    // 데이터가 2일 이상이면 무조건 표시 (라벨은 고정)
+    hasWeek = DATE_COLUMNS.length >= 2;
+    hasMonth = DATE_COLUMNS.length >= 2;
+  }
+
+  const kpis = [
+    { label:'전체 영상', value:fmtNum(totalVideos), unit:'개' },
+    { label:'총 누적 조회수', value:fmtNum(totalViews), unit:'회' },
+    { label:'공개 영상', value:fmtNum(publicVideos), unit:`개 / ${totalVideos}` },
+  ];
+  if (hasYest) kpis.push({ label:'어제 신규 조회수', value:fmtNum(yestDelta), unit:'회', delta:yestDelta });
+  if (hasWeek)  kpis.push({ label:'최근 7일 증가',  value:fmtNum(weekDelta),  unit:'회', delta:weekDelta });
+  if (hasMonth) kpis.push({ label:'최근 30일 증가', value:fmtNum(monthDelta), unit:'회', delta:monthDelta });
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k => {
+    let deltaHtml = '';
+    if (k.delta !== undefined){
+      const cls = k.delta > 0 ? 'up' : (k.delta < 0 ? 'down' : 'flat');
+      const arrow = k.delta > 0 ? '↑' : (k.delta < 0 ? '↓' : '–');
+      deltaHtml = `<span class="kpi-delta ${cls}">${arrow} ${fmtNum(Math.abs(k.delta))}</span>`;
+    }
+    return `<div class="kpi-card">
+      <div class="kpi-label">${escapeHtml(k.label)}</div>
+      <div class="kpi-value">${k.value}<span style="font-size:13px;font-weight:600;color:var(--ink-3);margin-left:4px;">${escapeHtml(k.unit||'')}</span></div>
+      ${deltaHtml}
+    </div>`;
+  }).join('');
+
+  // ========================================
+  // 일자별 조회수 추이 — 실제 그날 발생한 조회수 (전일 대비 증가)
+  // 첫 일자는 비교 대상이 없으므로 제외
+  // ========================================
+  const drawDaily = () => {
+    if (DATE_COLUMNS.length >= 2){
+      const labels = DATE_COLUMNS.slice(1);   // 첫 일자는 delta 계산 불가
+      const sums = DATE_COLUMNS.map(col => DATA.reduce((s, r) => s + parseNum(r[col]), 0));
+      const dailyNew = sums.slice(1).map((v, i) => v - sums[i]);   // 각 일자의 신규 조회수
+      if (dailyChart) dailyChart.destroy();
+      const ctx = document.getElementById('dailyChart');
+      dailyChart = new Chart(ctx, {
+        type:'bar',
+        data:{ labels, datasets:[{
+          label:'그날 신규 조회수', data: dailyNew,
+          backgroundColor:'rgba(255,59,59,0.65)', borderColor:'#ff3b3b', borderWidth:1.5, borderRadius:6
+        }]},
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ display:false },
+            tooltip:{ callbacks:{ label: ctx => `+${fmtNum(ctx.parsed.y)} 회 (그날 발생)` }}},
+          scales:{
+            y:{ beginAtZero:true, ticks:{ callback:v => fmtNum(v), font:{family:'inherit'} }, grid:{color:'#eef0f4'} },
+            x:{ ticks:{font:{family:'inherit', size:11}}, grid:{display:false} }
+          }
+        }
+      });
+    } else {
+      const ctx = document.getElementById('dailyChart');
+      if (ctx){
+        const c = ctx.getContext('2d');
+        c.clearRect(0, 0, ctx.width, ctx.height);
+        c.fillStyle = '#9099a6';
+        c.font = '14px sans-serif';
+        c.textAlign = 'center';
+        c.fillText('아직 일자별 데이터가 부족합니다 (2일 이상 누적 필요)', ctx.width/2, ctx.height/2);
+      }
+    }
+  };
+
+  // ========================================
+  // 월별 조회수 추이 — 그달 발생한 조회수 (전월 대비 증가)
+  // 첫 달과 마지막 미완료 달도 포함하되, 첫 달은 비교 대상 없으므로 제외
+  // ========================================
+  const drawMonthly = () => {
+    if (DATE_COLUMNS.length >= 2){
+      // 각 월의 마지막 데이터 사용 (그 월 채널 전체 조회수의 스냅샷)
+      const monthMap = new Map();
+      DATE_COLUMNS.forEach(d => {
+        const m = d.substring(0, 7);
+        monthMap.set(m, d);
+      });
+      const allMonths = [...monthMap.keys()].sort();
+      if (allMonths.length < 2){
+        // 한 달치 데이터만 있으면 안내 메시지
+        const ctx = document.getElementById('monthlyChart');
+        if (monthlyChart) monthlyChart.destroy();
+        if (ctx){
+          const c = ctx.getContext('2d');
+          c.clearRect(0, 0, ctx.width, ctx.height);
+          c.fillStyle = '#9099a6';
+          c.font = '14px sans-serif';
+          c.textAlign = 'center';
+          c.fillText('아직 한 달치 데이터만 있어요. 다음 달부터 표시됩니다.', ctx.width/2, ctx.height/2);
+        }
+        return;
+      }
+      const monthSums = allMonths.map(m => DATA.reduce((s, r) => s + parseNum(r[monthMap.get(m)]), 0));
+      const monthLabels = allMonths.slice(1);   // 첫 달 제외
+      const monthDeltas = monthSums.slice(1).map((v, i) => v - monthSums[i]);
+      if (monthlyChart) monthlyChart.destroy();
+      const ctx = document.getElementById('monthlyChart');
+      monthlyChart = new Chart(ctx, {
+        type:'bar',
+        data:{ labels: monthLabels, datasets:[{
+          label:'월별 신규 조회수', data: monthDeltas,
+          backgroundColor:'rgba(37,99,235,0.65)', borderColor:'#2563eb', borderWidth:1.5, borderRadius:6
+        }]},
+        options:{
+          responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ display:false },
+            tooltip:{ callbacks:{ label: ctx => `+${fmtNum(ctx.parsed.y)} 회 (그달 발생)` }}},
+          scales:{
+            y:{ beginAtZero:true, ticks:{ callback:v => fmtNum(v), font:{family:'inherit'} }, grid:{color:'#eef0f4'} },
+            x:{ ticks:{font:{family:'inherit', size:11}}, grid:{display:false} }
+          }
+        }
+      });
+    } else {
+      const ctx = document.getElementById('monthlyChart');
+      if (ctx){
+        const c = ctx.getContext('2d');
+        c.clearRect(0, 0, ctx.width, ctx.height);
+        c.fillStyle = '#9099a6';
+        c.font = '14px sans-serif';
+        c.textAlign = 'center';
+        c.fillText('아직 일자별 데이터가 부족합니다 (2일 이상 누적 필요)', ctx.width/2, ctx.height/2);
+      }
+    }
+  };
+
+  drawDaily();
+  drawMonthly();
+
+  // ========================================
+  // TOP 10 — 7일 성장 (윈도우 부족 시 가능한 만큼)
+  // ========================================
+  const renderTop7Days = () => {
+    if (DATE_COLUMNS.length >= 2){
+      const last = DATE_COLUMNS[DATE_COLUMNS.length - 1];
+      const lastDate = new Date(last);
+      let weekFromCol = DATE_COLUMNS[0];
+      for (let i = DATE_COLUMNS.length - 1; i >= 0; i--){
+        const d = new Date(DATE_COLUMNS[i]);
+        if ((lastDate - d) / 86400000 >= 7){ weekFromCol = DATE_COLUMNS[i]; break; }
+      }
+      const titleEl = document.getElementById('topGrowthTitle');
+      if (titleEl) titleEl.textContent = '최근 7일';
+      const sortedByGrowth = DATA.slice()
+        .map(r => ({ ...r, _g:viewsDelta(r, weekFromCol, last) }))
+        .filter(r => r._g > 0)
+        .sort((a, b) => b._g - a._g)
+        .slice(0, 10);
+      document.getElementById('topByGrowth').innerHTML = sortedByGrowth.map((r, i) => {
+        const url = r.URL || '#';
+        return `<li>
+          <span class="rank">${i+1}</span>
+          <div class="title-cell">
+            <a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(r['영상 제목'] || '')}</a>
+            <div class="title-meta">${escapeHtml(r['모듈'] || '')}</div>
+          </div>
+          <span class="delta up">+${fmtNum(r._g)}</span>
+        </li>`;
+      }).join('') || '<li class="title-meta" style="text-align:center;color:#aaa;">증가 데이터 없음</li>';
+    } else {
+      document.getElementById('topByGrowth').innerHTML = '<li class="title-meta" style="text-align:center;color:#aaa;padding:20px;">아직 데이터가 부족합니다.<br>(2일 이상 누적되면 표시)</li>';
+    }
+  };
+
+  // ========================================
+  // TOP 10 — 최근 한 달 조회수 증가
+  // ========================================
+  const renderTopMonth = () => {
+    if (DATE_COLUMNS.length >= 2){
+      const last = DATE_COLUMNS[DATE_COLUMNS.length - 1];
+      const lastDate = new Date(last);
+      let monthFromCol = DATE_COLUMNS[0];
+      for (let i = DATE_COLUMNS.length - 1; i >= 0; i--){
+        const d = new Date(DATE_COLUMNS[i]);
+        if ((lastDate - d) / 86400000 >= 30){ monthFromCol = DATE_COLUMNS[i]; break; }
+      }
+      const titleEl = document.getElementById('topMonthTitle');
+      if (titleEl) titleEl.textContent = '최근 한 달';
+      const sortedByMonth = DATA.slice()
+        .map(r => ({ ...r, _m:viewsDelta(r, monthFromCol, last) }))
+        .filter(r => r._m > 0)
+        .sort((a, b) => b._m - a._m)
+        .slice(0, 10);
+      document.getElementById('topByMonth').innerHTML = sortedByMonth.map((r, i) => {
+        const url = r.URL || '#';
+        return `<li>
+          <span class="rank">${i+1}</span>
+          <div class="title-cell">
+            <a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(r['영상 제목'] || '')}</a>
+            <div class="title-meta">${escapeHtml(r['모듈'] || '')}</div>
+          </div>
+          <span class="delta up">+${fmtNum(r._m)}</span>
+        </li>`;
+      }).join('') || '<li class="title-meta" style="text-align:center;color:#aaa;">증가 데이터 없음</li>';
+    } else {
+      document.getElementById('topByMonth').innerHTML = '<li class="title-meta" style="text-align:center;color:#aaa;padding:20px;">아직 데이터가 부족합니다.</li>';
+    }
+  };
+
+  renderTop7Days();
+  renderTopMonth();
+}
+
+// ============================================================
+// 변경 이력 렌더링
+// ============================================================
+function renderChangelog(){
+  const wrap = document.getElementById('changelogWrap');
+  const countEl = document.getElementById('changelogCount');
+  // 카운트는 최근 7일만 (전체가 누적되면 의미 없음)
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
+  const recentCount = CHANGELOG.filter(row => {
+    const ts = String(row['시각'] || '').trim();
+    if (!ts) return false;
+    const d = new Date(ts.replace(' ', 'T'));
+    return !isNaN(d) && d >= sevenDaysAgo;
+  }).length;
+  countEl.textContent = recentCount;
+  countEl.title = `최근 7일 변경 ${recentCount}건 / 전체 ${CHANGELOG.length}건`;
+
+  if (!CHANGELOG.length){
+    wrap.innerHTML = `<div class="changelog-empty">
+      <span class="icon">📭</span>
+      변경 이력 데이터가 없습니다.<br>
+      <small>1) Apps Script에서 <b>📋 변경 사항 감지 + 기록</b>을 실행하면 시트에 변경이 쌓입니다.<br>
+      2) 그 시트(<code>변경이력</code>)를 별도로 <b>파일 → 공유 → 웹에 게시 → CSV</b> 받기.<br>
+      3) HTML 코드의 <code>CHANGELOG_CSV_URL</code> 에 그 URL 입력.</small>
+    </div>`;
+    return;
+  }
+
+  const sorted = CHANGELOG.slice().sort((a, b) => (b['시각']||'').localeCompare(a['시각']||''));
+
+  const headerInfo = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+    <div style="font-size:13px;color:var(--ink-2);">
+      <strong>최근 7일 변경:</strong>
+      <span style="display:inline-block;padding:3px 10px;background:#fee2e2;color:#9a1f1f;border-radius:999px;font-weight:700;font-size:12px;margin:0 4px;">${recentCount}건</span>
+      <span style="color:var(--ink-3);font-size:12px;">· 전체 누적 ${CHANGELOG.length.toLocaleString()}건</span>
+    </div>
+    <div style="font-size:11px;color:var(--ink-4);">상단 탭의 카운트는 최근 7일 기준입니다.</div>
+  </div>`;
+
+  wrap.innerHTML = headerInfo + `<table class="changelog-table">
+    <thead><tr>
+      <th class="col-time">시각</th>
+      <th class="col-source">출처</th>
+      <th class="col-type">유형</th>
+      <th class="col-no">번호</th>
+      <th class="col-title">영상 제목</th>
+      <th class="col-field">변경 필드</th>
+      <th class="col-old">이전</th>
+      <th class="col-new">→ 새 값</th>
+    </tr></thead>
+    <tbody>
+      ${sorted.map(row => {
+        const type = (row['유형']||'').trim();
+        let cls = 'cl-type-edit', label = type;
+        if (type === '추가'){ cls = 'cl-type-add'; }
+        else if (type === '삭제'){ cls = 'cl-type-del'; }
+        const no = String(row['번호'] || '').trim();
+        const source = (row['출처'] || '위하고').trim();
+        let srcCls = 'src-wehago';
+        if (/AI생활|AI/.test(source)) srcCls = 'src-ai';
+        else if (/WE\s*Studio|WeStudio/i.test(source)) srcCls = 'src-ws';
+        return `<tr class="cl-row" data-no="${escapeHtml(no)}" data-source="${escapeHtml(source)}" title="클릭하면 해당 영상으로 이동합니다">
+          <td class="col-time">${escapeHtml(row['시각'] || '')}</td>
+          <td class="col-source"><span class="src-badge ${srcCls}">${escapeHtml(source)}</span></td>
+          <td class="col-type"><span class="cl-type-badge ${cls}">${escapeHtml(label || '수정')}</span></td>
+          <td class="col-no">${escapeHtml(no)}</td>
+          <td class="col-title">${escapeHtml(row['영상제목'] || '')}</td>
+          <td class="col-field">${escapeHtml(row['변경필드'] || '')}</td>
+          <td class="col-old">${escapeHtml(row['이전값'] || '')}</td>
+          <td class="col-new">${escapeHtml(row['새값'] || '')}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+
+  // 클릭 핸들러: 변경이력 행 → 출처에 따라 적절한 탭으로 점프
+  wrap.querySelectorAll('.cl-row').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const no = tr.dataset.no;
+      const source = tr.dataset.source || '위하고';
+      if (!no) return;
+      // WE Studio면 WS 데이터에서 찾고, 아니면 YT 데이터에서 찾기
+      if (/WE\s*Studio|WeStudio/i.test(source)){
+        // WS 데이터에서 번호 매칭하는 행 찾기
+        const ws = WESTUDIO_DATA.find(r => String(r['번호']||'').trim() === String(no));
+        if (ws){
+          const vid = String(ws['고유번호']||'').trim();
+          if (vid) jumpToWeStudioByVid(vid);
+        }
+      } else {
+        // YT 데이터 (위하고 또는 AI생활)
+        jumpToVideo(no);
+      }
+    });
+  });
+}
+
+// 변경이력 → 동영상 목록 점프 (고유번호 기반)
+function jumpToVideo(no){
+  // 번호 → 고유번호 매핑
+  const target_video = DATA.find(r => String(r['번호']||'').trim() === String(no));
+  if (target_video){
+    const vid = String(target_video['고유번호']||'').trim();
+    if (vid){
+      jumpToYouTubeByVid(vid);
+      return;
+    }
+  }
+  // 고유번호가 없는 경우 fallback: 뷰만 전환
+  document.querySelectorAll('.view-tab').forEach(x => x.classList.remove('active'));
+  document.querySelector('.view-tab[data-view="list"]').classList.add('active');
+  document.querySelectorAll('.view-section').forEach(x => x.classList.remove('active'));
+  document.getElementById('view-list').classList.add('active');
+  currentView = 'list';
+  alert('고유번호 매칭이 실패했습니다 (번호: ' + no + '). 시트에서 해당 행의 고유번호 값을 확인해주세요.');
+}
+
+// ============================================================
+// 동영상 목록
+// ============================================================
+function renderSummary(){
+  const grid = document.getElementById('summaryGrid');
+  grid.innerHTML = PROGRAM_GROUPS.map(g => {
+    const rows = DATA.filter(g.filter);
+    const tot = rows.length;
+    const pub = rows.filter(r => r['공개상태']==='공개').length;
+    const part = rows.filter(r => r['공개상태']==='일부공개').length;
+    const priv = rows.filter(r => r['공개상태']==='비공개').length;
+    const subHtml = `<div class="sub-label">${g.sub ? escapeHtml(g.sub) : ''}</div>`;
+    return `<div class="summary-card ${g.cls||''}">
+      <div class="name"><span style="font-size:18px;line-height:1;">${g.icon}</span>${escapeHtml(g.label)}</div>
+      ${subHtml}
+      <div class="total-num">${tot.toLocaleString()}<span class="unit">건</span></div>
+      <div class="stats">
+        <span class="stat stat-pub"><span class="dot"></span>공개 ${pub.toLocaleString()}</span>
+        <span class="stat stat-part"><span class="dot"></span>일부 ${part.toLocaleString()}</span>
+        <span class="stat stat-priv"><span class="dot"></span>비공개 ${priv.toLocaleString()}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function refreshPlaylistFilter(){
+  const tab = TABS.find(t => t.id===currentTab);
+  const rows = DATA.filter(tab.filter);
+  const set = new Set();
+  rows.forEach(r => getPlaylists(r).forEach(p => set.add(p)));
+
+  // 1) 상위(항상 펼쳐진) - PLAYLIST_TOP 순서 그대로
+  const top = PLAYLIST_TOP.filter(p => set.has(p));
+
+  // 2) 그룹별로 분류 — match 함수로 적합한 그룹에 모두 들어감
+  const groupItems = PLAYLIST_GROUPS.map(g => ({ name: g.name, order: g.order, items: [] }));
+  const usedSet = new Set(top);
+
+  set.forEach(p => {
+    if (usedSet.has(p)) return;
+    for (let i = 0; i < PLAYLIST_GROUPS.length; i++){
+      if (PLAYLIST_GROUPS[i].match(p)){
+        groupItems[i].items.push(p);
+        usedSet.add(p);
+        return;
+      }
+    }
+  });
+
+  // 각 그룹: order 우선, 없는 것은 가나다 순으로 뒤에
+  groupItems.forEach(g => {
+    const orderRank = (p) => {
+      const idx = g.order.indexOf(p);
+      return idx < 0 ? Infinity : idx;
+    };
+    g.items.sort((a, b) => {
+      const ra = orderRank(a), rb = orderRank(b);
+      if (ra !== rb) return ra - rb;
+      return a.localeCompare(b, 'ko');
+    });
+  });
+
+  // 3) 어디에도 안 속한 것
+  const misc = [];
+  set.forEach(p => { if (!usedSet.has(p)) misc.push(p); });
+  misc.sort((a, b) => a.localeCompare(b, 'ko'));
+
+  // 커스텀 드롭다운 패널 렌더링
+  const panel = document.getElementById('plDdPanel');
+  const hidden = document.getElementById('playlistFilter');
+  const cur = hidden.value;
+
+  let html = '';
+  // 전체 옵션
+  html += `<div class="pl-dd-item ${cur===''?'selected':''}" data-val="">전체 재생목록</div>`;
+
+  // 주요 (펼쳐진 상태)
+  if (top.length){
+    html += '<div class="pl-dd-section-title">🟦 주요</div>';
+    html += top.map(p => `<div class="pl-dd-item ${p===cur?'selected':''}" data-val="${escapeHtml(p)}">${escapeHtml(p)}</div>`).join('');
+  }
+
+  // 그룹 (큰 순서: SmartA 10 → SmartA → iCUBE → ERP iU)
+  groupItems.forEach(g => {
+    if (!g.items.length) return;
+    const groupHasSelected = g.items.includes(cur);
+    html += `<div class="pl-dd-group ${groupHasSelected?'open':''}">
+      <div class="pl-dd-group-header ${groupHasSelected?'open':''}">
+        <span>📦 ${escapeHtml(g.name)} <span class="gcount">${g.items.length}</span></span>
+        <span class="chev">▶</span>
+      </div>
+      <div class="pl-dd-group-items">
+        ${g.items.map(p => `<div class="pl-dd-item ${p===cur?'selected':''}" data-val="${escapeHtml(p)}">${escapeHtml(p)}</div>`).join('')}
+      </div>
+    </div>`;
+  });
+
+  // 기타
+  if (misc.length){
+    const miscHasSelected = misc.includes(cur);
+    html += `<div class="pl-dd-group ${miscHasSelected?'open':''}">
+      <div class="pl-dd-group-header ${miscHasSelected?'open':''}">
+        <span>📁 기타 <span class="gcount">${misc.length}</span></span>
+        <span class="chev">▶</span>
+      </div>
+      <div class="pl-dd-group-items">
+        ${misc.map(p => `<div class="pl-dd-item ${p===cur?'selected':''}" data-val="${escapeHtml(p)}">${escapeHtml(p)}</div>`).join('')}
+      </div>
+    </div>`;
+  }
+  panel.innerHTML = html;
+
+  // 이벤트 바인딩
+  panel.querySelectorAll('.pl-dd-item').forEach(it => {
+    it.addEventListener('click', e => {
+      e.stopPropagation();
+      const val = it.dataset.val || '';
+      hidden.value = val;
+      document.getElementById('plDdLabel').textContent = val || '전체 재생목록';
+      panel.style.display = 'none';
+      JUMP_VID = '';
+      render();
+    });
+  });
+  panel.querySelectorAll('.pl-dd-group-header').forEach(h => {
+    h.addEventListener('click', e => {
+      e.stopPropagation();
+      h.classList.toggle('open');
+      h.parentElement.classList.toggle('open');
+    });
+  });
+
+  document.getElementById('plDdLabel').textContent = cur || '전체 재생목록';
+}
+
+function renderTabs(){
+  const el = document.getElementById('tabs');
+  el.innerHTML = TABS.map(t => {
+    const cnt = DATA.filter(t.filter).length;
+    return `<div class="tab ${t.id===currentTab?'active':''}" data-id="${t.id}">${t.label}<span class="badge">${cnt}</span></div>`;
+  }).join('');
+  el.querySelectorAll('.tab').forEach(d => d.addEventListener('click', () => {
+    JUMP_VID = '';
+    currentTab = d.dataset.id;
+    renderTabs(); refreshPlaylistFilter(); render();
+  }));
+}
+
+function rowHtml(r, num, keywords){
+  const videoId = extractVideoId(r.URL);
+  const titleHtml = highlightText(r['영상 제목']||'', keywords);
+  const title = r.URL ? `<a href="${escapeHtml(r.URL)}" target="_blank" rel="noopener">${titleHtml}</a>` : titleHtml;
+
+  const detail = (r['영상 상세 내용']||'').trim();
+  let detailBlock = '';
+  if (detail && detail !== '×' && detail.length > 0){
+    const detailHtml = buildDetailHtml(detail, videoId, keywords);
+    detailBlock = `<div class="detail-toggle" onclick="this.nextElementSibling.classList.toggle('show'); this.textContent=this.nextElementSibling.classList.contains('show')?'▲ 내용 접기':'▼ 내용 보기'">▼ 내용 보기</div><div class="detail-content">${detailHtml}</div>`;
+  }
+
+  const progKey = (r['프로그램']||'').replace(/\s/g,'').replace(/[^A-Za-z가-힣0-9]/g,'');
+  const playlists = getPlaylists(r).map(p => `<span class="pl-item">${escapeHtml(p)}</span>`).join('');
+  const views = latestViews(r);
+  const viewsHtml = views > 0 ? fmtNum(views) : '<span style="color:#bbb;">—</span>';
+
+  // WE Studio 중복 매칭 마커
+  const vid = String(r['고유번호']||'').trim();
+  const inWS = vid && WS_BY_VID.has(vid);
+  const wsMarker = inWS
+    ? `<span class="dup-marker dup-ws" data-vid="${escapeHtml(vid)}" title="WE Studio에서 보기">🎬 WS</span>`
+    : '<span style="color:#ddd;">—</span>';
+
+  return `<tr>
+    <td class="col-no">${num}</td>
+    <td class="col-prog"><span class="badge-tag b-${progKey}">${escapeHtml(r['프로그램'])}</span></td>
+    <td class="col-type">${escapeHtml(r['상세유형'])}</td>
+    <td class="col-mod">${escapeHtml(r['모듈'])}</td>
+    <td class="col-style">${escapeHtml(r['유형'])}</td>
+    <td class="col-target">${escapeHtml(r['타겟'])}</td>
+    <td class="col-title">${title}${detailBlock}</td>
+    <td class="col-date">${escapeHtml(r['게시일자'])}</td>
+    <td class="col-len">${escapeHtml(r['영상길이'])}</td>
+    <td class="col-views">${viewsHtml}</td>
+    <td class="col-status">${statusBadge(r['공개상태'])}</td>
+    <td class="col-dup">${wsMarker}</td>
+    <td class="col-list">${playlists}</td>
+  </tr>`;
+}
+
+function ensureTable(){
+  const wrap = document.getElementById('tableWrap');
+  if(!wrap.querySelector('table')){
+    wrap.innerHTML = `<table>
+      <thead><tr>
+        <th class="col-no">번호</th>
+        <th class="col-prog">프로그램</th>
+        <th class="col-type">상세유형</th>
+        <th class="col-mod">모듈</th>
+        <th class="col-style">유형</th>
+        <th class="col-target">타겟</th>
+        <th class="col-title">영상 제목</th>
+        <th class="col-date">게시일자</th>
+        <th class="col-len">길이</th>
+        <th class="col-views">조회수</th>
+        <th class="col-status">공개상태</th>
+        <th class="col-dup">WS</th>
+        <th class="col-list">재생목록</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div id="empty" class="empty" style="display:none">조건에 맞는 데이터가 없습니다.</div>`;
+  }
+}
+
+function render(){
+  ensureTable();
+  let rows;
+  let keywords = [];
+  // VID 점프 모드 — 다른 모든 필터 무시하고 그 영상만 표시
+  if (JUMP_VID){
+    rows = DATA.filter(r => String(r['고유번호']||'').trim() === JUMP_VID);
+  } else {
+    const tab = TABS.find(t => t.id===currentTab);
+    rows = DATA.filter(tab.filter);
+    const q = document.getElementById('search').value.trim().toLowerCase();
+    keywords = q ? q.split(/\s+/).filter(Boolean) : [];
+    if(keywords.length){
+      rows = rows.filter(r => {
+        const combined = ((r['영상 제목']||'') + ' ' + (r['영상 상세 내용']||'')).toLowerCase();
+        return matchesQuery(combined, keywords);
+      });
+    }
+    const tf = document.getElementById('typeFilter').value;
+    if(tf) rows = rows.filter(r => r['유형']===tf);
+    const sf = document.getElementById('statusFilter').value;
+    if(sf) rows = rows.filter(r => r['공개상태']===sf);
+    const pf = document.getElementById('playlistFilter').value;
+    if(pf) rows = rows.filter(r => getPlaylists(r).includes(pf));
+  }
+  const sb = document.getElementById('sortBy').value;
+  const STATUS_ORDER = { '공개':0, '일부공개':1, '비공개':2 };
+  const statusRank = s => (s in STATUS_ORDER) ? STATUS_ORDER[s] : 99;
+  const baseSort = (a,b) => {
+    if(currentTab !== 'all'){
+      const sd = statusRank(a['공개상태']) - statusRank(b['공개상태']);
+      if(sd !== 0) return sd;
+    }
+    if(sb==='date_desc') return (b['게시일자']||'').localeCompare(a['게시일자']||'');
+    if(sb==='date_asc')  return (a['게시일자']||'').localeCompare(b['게시일자']||'');
+    if(sb==='views_desc') return latestViews(b) - latestViews(a);
+    if(sb==='no_desc')   return (parseInt(b['번호'])||0) - (parseInt(a['번호'])||0);
+    if(sb==='no_asc')    return (parseInt(a['번호'])||0) - (parseInt(b['번호'])||0);
+    return 0;
+  };
+  rows.sort(baseSort);
+  let countText = rows.length.toLocaleString() + '건';
+  if (JUMP_VID) countText += ` · 🔗 ${JUMP_VID} 점프`;
+  else if (keywords.length) countText += ` · 검색 키워드 ${keywords.length}개`;
+  document.getElementById('count').textContent = countText;
+  const tbody = document.getElementById('tbody');
+  document.getElementById('empty').style.display = rows.length===0?'block':'none';
+
+  // 점프 모드 배너
+  const ytBanner = document.getElementById('ytJumpBanner');
+  if (ytBanner){
+    if (JUMP_VID){
+      const matched = DATA.find(r => String(r['고유번호']||'').trim() === JUMP_VID);
+      const title = matched ? (matched['영상 제목']||'').slice(0,60) : '';
+      document.getElementById('ytJumpText').textContent = `고유번호 [${JUMP_VID}] 로 점프 중 — ${title}`;
+      ytBanner.style.display = 'flex';
+    } else {
+      ytBanner.style.display = 'none';
+    }
+  }
+
+  const groupMode = document.getElementById('groupByPlaylist').checked;
+  if(!groupMode){
+    tbody.innerHTML = rows.map((r,i) => rowHtml(r, rows.length - i, keywords)).join('');
+    bindDupMarkers(tbody);
+    return;
+  }
+
+  const groups = new Map();
+  const noPlaylist = [];
+  rows.forEach(r => {
+    const pls = getPlaylists(r);
+    if(pls.length === 0){ noPlaylist.push(r); return; }
+    pls.forEach(p => {
+      if(!groups.has(p)) groups.set(p, []);
+      groups.get(p).push(r);
+    });
+  });
+  const sortedKeys = [...groups.keys()].sort();
+  let html = '';
+  sortedKeys.forEach(key => {
+    const grp = groups.get(key).slice().sort(baseSort);
+    html += `<tr class="group-header"><td colspan="13">📁 ${escapeHtml(key)}<span class="gcount">${grp.length}건</span></td></tr>`;
+    html += grp.map((r,i) => rowHtml(r, grp.length - i, keywords)).join('');
+  });
+  if(noPlaylist.length){
+    html += `<tr class="group-header"><td colspan="13">📁 (재생목록 없음)<span class="gcount">${noPlaylist.length}건</span></td></tr>`;
+    html += noPlaylist.map((r,i) => rowHtml(r, noPlaylist.length - i, keywords)).join('');
+  }
+  tbody.innerHTML = html;
+  bindDupMarkers(tbody);
+}
+
+// YouTube → WE Studio 점프 이벤트 바인딩
+function bindDupMarkers(container){
+  container.querySelectorAll('.dup-ws').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const vid = el.dataset.vid;
+      if (vid) jumpToWeStudioByVid(vid);
+    });
+  });
+}
+
+function initFilters(){
+  const types = [...new Set(DATA.map(r => r['유형']).filter(Boolean))].sort();
+  const tf = document.getElementById('typeFilter');
+  tf.innerHTML = '<option value="">전체 유형</option>' + types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  const sts = ['공개','일부공개','비공개'];
+  const sf = document.getElementById('statusFilter');
+  sf.innerHTML = '<option value="">전체 공개상태</option>' + sts.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+}
+
+// ============================================================
+// 데이터 로딩
+// ============================================================
+function processRecords(rows){
+  function normalize(s){ return String(s || '').trim().replace(/\s+/g, '').toLowerCase(); }
+  let headerIdx = rows.findIndex(r => Array.isArray(r) && r.some(c => normalize(c) === '번호') && r.some(c => normalize(c) === 'url'));
+  if(headerIdx < 0) headerIdx = rows.findIndex(r => Array.isArray(r) && r.some(c => normalize(c) === '번호'));
+  if(headerIdx < 0) headerIdx = 0;
+
+  const header = (rows[headerIdx] || []).map(h => String(h||'').trim());
+  const records = [];
+  for(let i = headerIdx+1; i < rows.length; i++){
+    const row = rows[i];
+    if(!row || !row[0] || !String(row[0]).trim()) continue;
+    const obj = {};
+    header.forEach((h, idx) => {
+      if(!h) return;
+      const val = (row[idx] !== undefined && row[idx] !== null) ? String(row[idx]) : '';
+      obj[h] = val;
+    });
+    if(obj['게시일자']) obj['게시일자'] = fmtDate(obj['게시일자']);
+    if(obj['영상길이']) obj['영상길이'] = fmtDuration(obj['영상길이']);
+    records.push(obj);
+  }
+  // 일자 컬럼 식별
+  DATE_COLUMNS = header.filter(h => isDateCol(h)).sort();
+  return records;
+}
+
+// We Studio 시트 처리
+function processWeStudio(rows){
+  function normalize(s){ return String(s || '').trim().replace(/\s+/g, '').toLowerCase(); }
+  let headerIdx = rows.findIndex(r => Array.isArray(r) && r.some(c => normalize(c) === '번호') && r.some(c => normalize(c) === 'url'));
+  if(headerIdx < 0) headerIdx = rows.findIndex(r => Array.isArray(r) && r.some(c => normalize(c) === '번호'));
+  if(headerIdx < 0) headerIdx = 0;
+  const header = (rows[headerIdx] || []).map(h => String(h||'').trim());
+  const records = [];
+  for(let i = headerIdx+1; i < rows.length; i++){
+    const row = rows[i];
+    if(!row || !row[0] || !String(row[0]).trim()) continue;
+    const obj = {};
+    header.forEach((h, idx) => {
+      if(!h) return;
+      const val = (row[idx] !== undefined && row[idx] !== null) ? String(row[idx]) : '';
+      obj[h] = val;
+    });
+    if(obj['업로드 일자']) obj['업로드 일자'] = fmtDate(obj['업로드 일자']);
+    if(obj['영상길이']) obj['영상길이'] = fmtDuration(obj['영상길이']);
+    records.push(obj);
+  }
+  return records;
+}
+
+// =========================================
+// WE Studio 렌더링
+// =========================================
+// WE Studio 프로그램별 요약 (4개 카드)
+const WS_SUMMARY_GROUPS = [
+  { id:'total',  cls:'c-total',  label:'전체',     sub:'WE Studio 전체',           filter: r => true,                                                                                                  icon:'🎬', total:true },
+  { id:'wehago', cls:'c-wehago', label:'WEHAGO',   sub:'WEHAGO (ONE AI · SmartA 10 제외)', filter: r => (r['프로그램']==='WEHAGO' || r['프로그램']==='기타') && r['상세유형']!=='ONE AI' && r['상세유형']!=='SmartA 10', icon:'🟦' },
+  { id:'oneai',  cls:'c-oneai',  label:'ONE AI',   sub:'AI Solutions',             filter: r => r['상세유형']==='ONE AI',                                                                              icon:'✨' },
+  { id:'sa10',   cls:'c-sa10',   label:'SmartA 10', sub:'WEHAGO · Smart A 10',     filter: r => r['상세유형']==='SmartA 10',                                                                          icon:'🟩' },
+];
+
+function renderWsSummary(){
+  const grid = document.getElementById('wsSummaryGrid');
+  grid.innerHTML = WS_SUMMARY_GROUPS.map(g => {
+    const rows = WESTUDIO_DATA.filter(g.filter);
+    const tot = rows.length;
+    const pub = rows.filter(r => r['공개상태']==='공개').length;
+    const part = rows.filter(r => r['공개상태']==='일부공개').length;
+    const priv = rows.filter(r => r['공개상태']==='비공개').length;
+    const dup = rows.filter(r => YT_BY_VID.has(String(r['고유번호']||'').trim())).length;
+    return `<div class="summary-card ${g.cls||''}">
+      <div class="name"><span style="font-size:18px;line-height:1;">${g.icon}</span>${escapeHtml(g.label)}</div>
+      <div class="sub-label">${escapeHtml(g.sub)}</div>
+      <div class="total-num">${tot.toLocaleString()}<span class="unit">건</span></div>
+      <div class="stats">
+        <span class="stat stat-pub"><span class="dot"></span>공개 ${pub.toLocaleString()}</span>
+        <span class="stat stat-part"><span class="dot"></span>일부 ${part.toLocaleString()}</span>
+        <span class="stat stat-priv"><span class="dot"></span>비공개 ${priv.toLocaleString()}</span>
+        <span class="stat stat-dup"><span class="dot"></span>YT중복 ${dup.toLocaleString()}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderWsTabs(){
+  // YouTube 탭 순서를 그대로 사용하되, WE Studio 데이터가 있는 탭만 표시
+  const el = document.getElementById('wsTabs');
+  el.innerHTML = TABS.map(t => {
+    const cnt = WESTUDIO_DATA.filter(t.filter).length;
+    if (t.id !== 'all' && cnt === 0) return '';   // 데이터 없는 탭은 숨김
+    return `<div class="tab ${t.id===currentWsTab?'active':''}" data-id="${t.id}">${t.label}<span class="badge">${cnt}</span></div>`;
+  }).join('');
+  el.querySelectorAll('.tab').forEach(d => d.addEventListener('click', () => {
+    currentWsTab = d.dataset.id;
+    WS_JUMP_VID = '';   // 탭 클릭 시 점프 모드 해제
+    renderWsTabs();
+    renderWeStudio();
+  }));
+}
+
+function renderWeStudio(){
+  if (!WESTUDIO_DATA.length){
+    document.getElementById('wsTableWrap').innerHTML = '<div class="empty">WE Studio 데이터가 없습니다.</div>';
+    return;
+  }
+
+  // 요약 + 탭 갱신
+  renderWsSummary();
+  renderWsTabs();
+
+  // 채널 필터 옵션
+  const channels = [...new Set(WESTUDIO_DATA.map(r => r['채널명']).filter(Boolean))].sort();
+  const chSel = document.getElementById('wsChannelFilter');
+  const stSel = document.getElementById('wsStatusFilter');
+  const curCh = chSel.value, curSt = stSel.value;
+  chSel.innerHTML = '<option value="">전체 채널</option>' + channels.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  stSel.innerHTML = '<option value="">전체 공개상태</option><option value="공개">공개</option><option value="일부공개">일부공개</option><option value="비공개">비공개</option>';
+  if (channels.includes(curCh)) chSel.value = curCh;
+  if (curSt) stSel.value = curSt;
+
+  // === 필터 적용 ===
+  let rows;
+  let keywords = [];
+  if (WS_JUMP_VID){
+    // VID 점프 모드 — 다른 모든 필터 무시
+    rows = WESTUDIO_DATA.filter(r => String(r['고유번호']||'').trim() === WS_JUMP_VID);
+  } else {
+    const tab = TABS.find(t => t.id === currentWsTab) || TABS[0];
+    rows = WESTUDIO_DATA.filter(tab.filter);
+    const q = (document.getElementById('wsSearch').value || '').trim().toLowerCase();
+    keywords = q ? q.split(/\s+/).filter(Boolean) : [];
+    const dupVal = document.getElementById('wsDupFilter').value;
+    if (chSel.value) rows = rows.filter(r => r['채널명'] === chSel.value);
+    if (stSel.value) rows = rows.filter(r => r['공개상태'] === stSel.value);
+    if (keywords.length){
+      rows = rows.filter(r => {
+        const c = ((r['영상 제목']||'') + ' ' + (r['영상 상세 내용']||'')).toLowerCase();
+        return keywords.every(k => c.includes(k));
+      });
+    }
+    if (dupVal === 'dup'){
+      rows = rows.filter(r => YT_BY_VID.has(String(r['고유번호']||'').trim()));
+    } else if (dupVal === 'only'){
+      rows = rows.filter(r => !YT_BY_VID.has(String(r['고유번호']||'').trim()));
+    }
+  }
+
+  let countText = rows.length.toLocaleString() + '건';
+  if (WS_JUMP_VID) countText += ` · 🔗 ${WS_JUMP_VID} 점프`;
+  document.getElementById('wsCount').textContent = countText;
+
+  // 점프 모드 배너
+  const wsBanner = document.getElementById('wsJumpBanner');
+  if (wsBanner){
+    if (WS_JUMP_VID){
+      const matched = WESTUDIO_DATA.find(r => String(r['고유번호']||'').trim() === WS_JUMP_VID);
+      const title = matched ? (matched['영상 제목']||'').slice(0,60) : '';
+      document.getElementById('wsJumpText').textContent = `고유번호 [${WS_JUMP_VID}] 로 점프 중 — ${title}`;
+      wsBanner.style.display = 'flex';
+    } else {
+      wsBanner.style.display = 'none';
+    }
+  }
+
+  // 테이블 렌더
+  let html = `<table>
+    <thead><tr>
+      <th class="col-no">번호</th>
+      <th class="col-prog">채널명</th>
+      <th class="col-type">상세유형</th>
+      <th class="col-mod">모듈</th>
+      <th class="col-style">유형</th>
+      <th class="col-target">타겟</th>
+      <th class="col-title">영상 제목</th>
+      <th class="col-date">업로드 일자</th>
+      <th class="col-len">길이</th>
+      <th class="col-status">공개상태</th>
+      <th class="col-dup">YT</th>
+    </tr></thead><tbody>`;
+
+  rows.forEach((r, i) => {
+    const num = rows.length - i;
+    const url = r.URL || '';
+    const titleHtml = highlightText(r['영상 제목']||'', keywords);
+    const titleEl = url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${titleHtml}</a>` : titleHtml;
+    const detail = (r['영상 상세 내용']||'').trim();
+    const detailBlock = (detail && detail !== '×') ?
+      `<div class="detail-toggle" onclick="this.nextElementSibling.classList.toggle('show'); this.textContent=this.nextElementSibling.classList.contains('show')?'▲ 내용 접기':'▼ 내용 보기'">▼ 내용 보기</div><div class="detail-content">${escapeHtml(detail)}</div>` : '';
+    const vid = String(r['고유번호']||'').trim();
+    const inYT = vid && YT_BY_VID.has(vid);
+    const ytMarker = inYT
+      ? `<span class="dup-marker dup-yt" data-vid="${escapeHtml(vid)}" title="YouTube에서 보기">▶ YT</span>`
+      : '<span style="color:#ddd;">—</span>';
+    html += `<tr>
+      <td class="col-no">${num}</td>
+      <td class="col-prog">${escapeHtml(r['채널명']||'')}</td>
+      <td class="col-type">${escapeHtml(r['상세유형']||'')}</td>
+      <td class="col-mod">${escapeHtml(r['모듈']||'')}</td>
+      <td class="col-style">${escapeHtml(r['유형']||'')}</td>
+      <td class="col-target">${escapeHtml(r['타겟']||'')}</td>
+      <td class="col-title">${titleEl}${detailBlock}</td>
+      <td class="col-date">${escapeHtml(r['업로드 일자']||'')}</td>
+      <td class="col-len">${escapeHtml(r['영상길이']||'')}</td>
+      <td class="col-status">${statusBadge(r['공개상태']||'')}</td>
+      <td class="col-dup">${ytMarker}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  if (rows.length === 0){
+    html += '<div class="empty">조건에 맞는 데이터가 없습니다.</div>';
+  }
+  document.getElementById('wsTableWrap').innerHTML = html;
+
+  // YT 마커 클릭 → YouTube 목록으로 점프
+  document.getElementById('wsTableWrap').querySelectorAll('.dup-yt').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const vid = el.dataset.vid;
+      jumpToYouTubeByVid(vid);
+    });
+  });
+}
+
+// 양방향 점프 헬퍼
+function jumpToWeStudioByVid(vid){
+  document.querySelectorAll('.view-tab').forEach(x => x.classList.remove('active'));
+  document.querySelector('.view-tab[data-view="westudio"]').classList.add('active');
+  document.querySelectorAll('.view-section').forEach(x => x.classList.remove('active'));
+  document.getElementById('view-westudio').classList.add('active');
+  currentView = 'westudio';
+  if (!WS_BY_VID.has(vid)){
+    alert('WE Studio에 해당 영상(고유번호 ' + vid + ')이 없습니다.');
+    return;
+  }
+  // 모든 필터 초기화 + VID 점프 모드 활성화
+  WS_JUMP_VID = vid;
+  currentWsTab = 'all';
+  const fields = ['wsSearch','wsChannelFilter','wsStatusFilter','wsDupFilter'];
+  fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  renderWeStudio();
+  setTimeout(() => {
+    const tb = document.querySelector('#wsTableWrap tbody');
+    const first = tb && tb.querySelector('tr');
+    if (first){
+      first.scrollIntoView({behavior:'smooth', block:'center'});
+      first.style.background = '#fff59a';
+      setTimeout(() => { first.style.transition='background 1.5s'; first.style.background=''; }, 100);
+    }
+  }, 100);
+}
+
+function jumpToYouTubeByVid(vid){
+  document.querySelectorAll('.view-tab').forEach(x => x.classList.remove('active'));
+  document.querySelector('.view-tab[data-view="list"]').classList.add('active');
+  document.querySelectorAll('.view-section').forEach(x => x.classList.remove('active'));
+  document.getElementById('view-list').classList.add('active');
+  currentView = 'list';
+  if (!YT_BY_VID.has(vid)){
+    alert('YouTube에 해당 영상(고유번호 ' + vid + ')이 없습니다.');
+    return;
+  }
+  // VID 점프 모드 활성화 + 모든 필터 초기화
+  JUMP_VID = vid;
+  currentTab = 'all';
+  renderTabs();
+  document.getElementById('search').value = '';
+  document.getElementById('typeFilter').value = '';
+  document.getElementById('statusFilter').value = '';
+  document.getElementById('playlistFilter').value = '';
+  document.getElementById('groupByPlaylist').checked = false;
+  refreshPlaylistFilter();
+  render();
+  setTimeout(() => {
+    const tb = document.getElementById('tbody');
+    const first = tb && tb.querySelector('tr:not(.group-header)');
+    if (first){
+      first.scrollIntoView({behavior:'smooth', block:'center'});
+      first.style.background = '#fff59a';
+      setTimeout(() => { first.style.transition='background 1.5s'; first.style.background=''; }, 100);
+    }
+  }, 100);
+}
+
+// 점프 해제 (전체 보기 복귀)
+function clearYtJump(){
+  JUMP_VID = '';
+  render();
+}
+function clearWsJump(){
+  WS_JUMP_VID = '';
+  renderWeStudio();
+}
+
+function processChangelog(rows){
+  let headerIdx = rows.findIndex(r => Array.isArray(r) && r.some(c => String(c||'').trim() === '시각'));
+  if(headerIdx < 0) return [];
+  const header = (rows[headerIdx] || []).map(h => String(h||'').trim());
+  const records = [];
+  for(let i = headerIdx+1; i < rows.length; i++){
+    const row = rows[i];
+    if(!row || !row[0] || !String(row[0]).trim()) continue;
+    const obj = {};
+    header.forEach((h, idx) => { if(h) obj[h] = (row[idx] !== undefined && row[idx] !== null) ? String(row[idx]) : ''; });
+    records.push(obj);
+  }
+  return records;
+}
+
+function showError(msg, hint){
+  const subEl = document.getElementById('lastUpdated');
+  subEl.textContent = '⚠️ 데이터를 불러오지 못했습니다';
+  document.getElementById('tableWrap').innerHTML = `<div class="error-box">
+    <strong>데이터를 불러올 수 없습니다.</strong>
+    ${hint ? `<div style="margin-bottom:10px;">${hint}</div>` : ''}
+    <div style="font-family:monospace;font-size:12px;background:#fff;padding:8px;border-radius:6px;">오류: ${escapeHtml(msg)}</div>
+    <div style="margin-top:14px;font-size:12px;">
+      <strong>체크 포인트:</strong>
+      <ul style="margin:6px 0 0 20px;line-height:1.7;">
+        <li>Google Sheets에서 <b>파일 → 공유 → 웹에 게시</b>가 정상적으로 활성화되어 있나요?</li>
+        <li>아래 URL을 새 탭에서 직접 열었을 때 CSV가 다운로드되나요?<br>
+          <a href="${CSV_URL}" target="_blank" style="word-break:break-all;color:#2563eb;font-size:11px;">${escapeHtml(CSV_URL)}</a></li>
+      </ul>
+    </div>
+  </div>`;
+}
+
+// CSV URL을 fetch + 파싱 → Promise로 반환
+function fetchCsv(url){
+  return new Promise((resolve, reject) => {
+    const u = url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
+    Papa.parse(u, {
+      download: true, skipEmptyLines: true,
+      complete: r => resolve(r.data),
+      error: e => reject(e),
+    });
+  });
+}
+
+function loadData(){
+  const btn = document.getElementById('refreshBtn');
+  const subEl = document.getElementById('lastUpdated');
+  btn.classList.add('loading');
+
+  Promise.all([
+    fetchCsv(WEHAGO_CSV_URL).catch(e => { console.warn('WEHAGO load fail', e); return []; }),
+    fetchCsv(AI_LIFE_CSV_URL).catch(e => { console.warn('AI Life load fail', e); return []; }),
+    fetchCsv(WESTUDIO_CSV_URL).catch(e => { console.warn('WeStudio load fail', e); return []; }),
+  ]).then(([wehagoRows, aiRows, wsRows]) => {
+    try {
+      const wehago = processRecords(wehagoRows);
+      const ai = processRecords(aiRows);
+      // 채널 표식
+      wehago.forEach(r => r._채널 = '위하고');
+      ai.forEach(r => r._채널 = '슬기로운 AI생활');
+      DATA = wehago.concat(ai);
+
+      WESTUDIO_DATA = processWeStudio(wsRows);
+
+      // 고유번호 인덱스 (양방향 매칭용)
+      YT_BY_VID = new Map();
+      DATA.forEach(r => {
+        const vid = String(r['고유번호']||'').trim();
+        if (vid) YT_BY_VID.set(vid, r);
+      });
+      WS_BY_VID = new Map();
+      WESTUDIO_DATA.forEach(r => {
+        const vid = String(r['고유번호']||'').trim();
+        if (vid) WS_BY_VID.set(vid, r);
+      });
+
+      if (DATA.length === 0 && WESTUDIO_DATA.length === 0){
+        showError('데이터가 비어있거나 헤더 행을 찾을 수 없습니다.');
+        return;
+      }
+
+      subEl.textContent = `위하고 ${wehago.length.toLocaleString()}건 + AI생활 ${ai.length.toLocaleString()}건 · WE Studio ${WESTUDIO_DATA.length.toLocaleString()}건 · 동기화 ${new Date().toLocaleString('ko-KR')}`;
+      document.getElementById('listCount').textContent = DATA.length.toLocaleString();
+      document.getElementById('westudioCount').textContent = WESTUDIO_DATA.length.toLocaleString();
+
+      initFilters();
+      renderSummary();
+      renderTabs();
+      refreshPlaylistFilter();
+      render();
+      renderDashboard();
+      renderWeStudio();
+      // 변경 이력 + 조회수 비동기 로드
+      loadChangelog();
+      loadViews();
+    } catch(err){
+      console.error(err);
+      showError(err.message || String(err));
+    } finally {
+      btn.classList.remove('loading');
+    }
+  });
+}
+
+// 별도 조회수 시트 fetch (있으면 메인 시트의 조회수 컬럼을 덮어씀)
+function loadViews(){
+  if (!VIEWS_CSV_URL) return;
+  const url = VIEWS_CSV_URL + (VIEWS_CSV_URL.includes('?') ? '&' : '?') + '_t=' + Date.now();
+  Papa.parse(url, {
+    download: true,
+    skipEmptyLines: true,
+    complete: function(results){
+      try {
+        const rows = results.data;
+        // 헤더 행 찾기 (영상ID 또는 번호)
+        let hi = rows.findIndex(r => Array.isArray(r) && (r.includes('영상ID') || r.includes('번호')));
+        if (hi < 0) return;
+        const header = rows[hi].map(h => String(h||'').trim());
+        const idCol = header.indexOf('영상ID') >= 0 ? header.indexOf('영상ID') : header.indexOf('번호');
+        const dateCols = header.map((h, i) => isDateCol(h) ? i : -1).filter(i => i >= 0);
+        const dateNames = dateCols.map(i => header[i]);
+        // 영상ID 또는 번호로 메인 데이터 매핑
+        const viewMap = new Map();
+        for (let i = hi + 1; i < rows.length; i++){
+          const row = rows[i];
+          const key = String(row[idCol]||'').trim();
+          if (!key) continue;
+          const obj = {};
+          dateCols.forEach((c, di) => { obj[dateNames[di]] = row[c]; });
+          viewMap.set(key, obj);
+        }
+        // 메인 데이터에 머지
+        DATA.forEach(rec => {
+          const key1 = extractVideoId(rec.URL);
+          const key2 = String(rec['번호']||'').trim();
+          const v = (key1 && viewMap.get(key1)) || viewMap.get(key2);
+          if (v){
+            dateNames.forEach(dn => { rec[dn] = v[dn]; });
+          }
+        });
+        // DATE_COLUMNS 갱신
+        const merged = new Set([...DATE_COLUMNS, ...dateNames]);
+        DATE_COLUMNS = [...merged].sort();
+        renderDashboard();
+        render();
+      } catch(e){ console.warn('views fetch parse failed:', e); }
+    },
+    error: function(err){ console.warn('Views CSV fetch failed:', err); }
+  });
+}
+
+function loadChangelog(){
+  if (!CHANGELOG_CSV_URL){
+    CHANGELOG = [];
+    renderChangelog();
+    return;
+  }
+  const url = CHANGELOG_CSV_URL + (CHANGELOG_CSV_URL.includes('?') ? '&' : '?') + '_t=' + Date.now();
+  Papa.parse(url, {
+    download: true,
+    skipEmptyLines: true,
+    complete: function(results){
+      try { CHANGELOG = processChangelog(results.data); }
+      catch(e){ CHANGELOG = []; console.error(e); }
+      renderChangelog();
+    },
+    error: function(err){
+      console.warn('Changelog fetch failed:', err);
+      CHANGELOG = [];
+      renderChangelog();
+    }
+  });
+}
+
+// ============================================================
+// 뷰 전환
+// ============================================================
+document.querySelectorAll('.view-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    const v = t.dataset.view;
+    currentView = v;
+    document.querySelectorAll('.view-tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.querySelectorAll('.view-section').forEach(x => x.classList.remove('active'));
+    document.getElementById('view-' + v).classList.add('active');
+    if (v === 'dashboard') renderDashboard();
+    if (v === 'westudio') renderWeStudio();
+  });
+});
+
+// 버전 모달
+function renderVersionLog(){
+  const body = document.getElementById('versionLogBody');
+  body.innerHTML = VERSION_LOG.map(v => `
+    <div class="ver-entry">
+      <div class="ver-head">
+        <span class="ver-num">v${v.version}</span>
+        <span class="ver-date">${escapeHtml(v.date)}</span>
+      </div>
+      <ul>${v.changes.map(c => `<li>${escapeHtml(c)}</li>`).join('')}</ul>
+    </div>
+  `).join('');
+}
+document.getElementById('verBadge').textContent = 'v' + VERSION;
+function openVersionModal(){
+  renderVersionLog();
+  document.getElementById('versionModal').style.display = 'flex';
+}
+document.getElementById('verBadge').addEventListener('click', openVersionModal);
+document.getElementById('verHistoryBtn').addEventListener('click', openVersionModal);
+document.getElementById('vmClose').addEventListener('click', () => {
+  document.getElementById('versionModal').style.display = 'none';
+});
+document.querySelector('#versionModal .version-modal-bg').addEventListener('click', () => {
+  document.getElementById('versionModal').style.display = 'none';
+});
+
+document.getElementById('refreshBtn').addEventListener('click', loadData);
+['search','typeFilter','statusFilter','sortBy'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => { JUMP_VID = ''; render(); });
+});
+document.getElementById('groupByPlaylist').addEventListener('change', () => { JUMP_VID = ''; render(); });
+
+// 검색 초기화 버튼 (YouTube 목록)
+document.getElementById('clearSearchBtn').addEventListener('click', () => {
+  JUMP_VID = '';
+  document.getElementById('search').value = '';
+  document.getElementById('typeFilter').value = '';
+  document.getElementById('statusFilter').value = '';
+  document.getElementById('playlistFilter').value = '';
+  document.getElementById('groupByPlaylist').checked = false;
+  document.getElementById('sortBy').value = 'date_desc';
+  document.getElementById('plDdLabel').textContent = '전체 재생목록';
+  refreshPlaylistFilter();
+  render();
+  document.getElementById('search').focus();
+});
+
+// 검색 초기화 버튼 (WE Studio)
+document.getElementById('wsClearBtn').addEventListener('click', () => {
+  WS_JUMP_VID = '';
+  ['wsSearch','wsChannelFilter','wsStatusFilter','wsDupFilter'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  renderWeStudio();
+  document.getElementById('wsSearch').focus();
+});
+
+// 점프 해제 버튼
+document.getElementById('ytJumpClear').addEventListener('click', clearYtJump);
+document.getElementById('wsJumpClear').addEventListener('click', clearWsJump);
+
+// WE Studio 필터 이벤트 (wsModuleFilter는 더 이상 존재하지 않음)
+['wsSearch','wsChannelFilter','wsStatusFilter','wsDupFilter'].forEach(id => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', () => { WS_JUMP_VID = ''; renderWeStudio(); });
+  if (el.tagName === 'SELECT') el.addEventListener('change', () => { WS_JUMP_VID = ''; renderWeStudio(); });
+});
+
+// 커스텀 드롭다운 토글
+document.getElementById('plDdBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  const panel = document.getElementById('plDdPanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+});
+document.addEventListener('click', e => {
+  const panel = document.getElementById('plDdPanel');
+  const btn = document.getElementById('plDdBtn');
+  if (!panel.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+    panel.style.display = 'none';
+  }
+});
+
+loadData();
+</script>
+</body>
+</html>
